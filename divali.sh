@@ -36,8 +36,8 @@ if [ ${#@} -lt 6 ] ; then
     printf '  - exp_type: Experience type (ie. nanoCT).\n';
     printf '  - modality: Modality.\n';
     printf '  - sample_name: Sample name.\n';
-    printf '  - R1:   Corrected FASTQ R1 filename (uncompressed).\n';
-    printf '  - R3:   Corrected FASTQ R3 filename (uncompressed).\n';
+    printf '  - R1:   Path to corrected FASTQ R1 (uncompressed).\n';
+    printf '  - R3:   Path to corrected FASTQ R3 (uncompressed).\n';
     printf '  - threads: Number of threads to align with.\n';
     printf 'Purpose: Align R1 & R3 as built by Divmux\n';
     printf '         Output is a bam file of name <sample_name.modality.exp_type.bam> \n\n';
