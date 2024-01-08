@@ -4,7 +4,7 @@
 
 - Run script like this:
 
-`codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 divmux.codon R2.gz R1.fastq R3.fastq whitelist.txt stats.tsv 1`
+`codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 divmux.codon R2.fastq.gz R1.fastq R3.fastq whitelist.txt stats.tsv 1`
 
 Default values for BC_LEN and BC_START need to be passed when invoking codon!
 
