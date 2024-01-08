@@ -1,5 +1,5 @@
 import sys
-import bio # codon (seq) plugin
+import bio # codon (seq) library
 from utils import *
 
 ## Install
@@ -201,12 +201,12 @@ def correct_barcodes_from_fastq(
 
 
 def main():
+    # Check if the correct number of arguments is passed
     if len(sys.argv) != 7:
         sys.stderr.write(
             f"\nExiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> {sys.argv[0]} \
             R2.fastq.gz R1.fastq R3.fastq whitelist.txt output_stats.tsv <max_hamming_dist>\n")
         sys.exit(1)
-    
     else:
         R2 = sys.argv[1]
         R1 = sys.argv[2]
@@ -214,7 +214,7 @@ def main():
         nanoCT_singlecell_bc_whitelist_filename = sys.argv[4]
         corrected_bc_stats_tsv_filename = sys.argv[5]
         max_mismatches = int(sys.argv[6])
-    
+    # Check that the max_mismatches is 0, 1, 2 or 3
     if max_mismatches not in [0,1,2,3]:
         sys.stderr.write(f"\nExiting...\n<max_hamming_dist> must be 0, 1, 2 or 3\n")
         sys.exit(1)
@@ -226,6 +226,7 @@ def main():
 
     # Read FASTQ with barcodes and write R1 R3 FASTQs with corrected barcodes in CB comment for barcodes
     # that match the whitelist closely enough, else only write the original barcodes in CR.
+    # Output the fraction of reads that have a barcode
     frac_bcs_found_rev = correct_barcodes_from_fastq(
         R1 = R1,
         R2 = R2,
@@ -237,7 +238,11 @@ def main():
         max_hamming_dist=max_mismatches,
         min_frac_bcs_to_find=min_frac_bcs_to_find_default,
         rev_comp=rev_comp)
-
+    
+    # If we find less than 50% matching bcs then we reperform
+    # the correction with rev_comp set to False
+    # and check again if we find more than 50% matching bcs
+    # If not we exit with an error
     if frac_bcs_found_rev < min_frac_bcs_to_find_default:
         sys.stdout.write(f"Warning: Only {frac_bcs_found_rev * 100.00}% of the reads have a barcode.\n \
     Barcode correction will be reperformed with R2 as Forward instead of Reverse.\n")
