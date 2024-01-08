@@ -8,7 +8,9 @@ from utils import *
 #SEQ (assuming Codon is in $HOME/.codon)
 #curl -L https://github.com/exaloop/seq/releases/download/v0.11.3/seq-$(uname -s | awk '{print tolower($0)}')-$(uname -m).tar.gz | tar zxvf - -C .codon/lib/codon/plugins
 
-## Run script with:
+## Run script like this:
+# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 divmux.codon R2.fastq.gz R1.fastq R3.fastq whitelist.txt output_stats.tsv 1
+# e.g.:
 # codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 divmux.codon ScKDMA_S1_R2_001.fastq.gz ScKDMA_S1_R1_001.fastq ScKDMA_S1_R3_001.fastq whitelist_10xATAC_737K-cratac-v1.txt ScKDMA_S1_BC_stats.tsv 1
 
 # Build exec with: (not very useful as exec still need to be run with codon)

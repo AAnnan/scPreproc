@@ -8,6 +8,7 @@
 
 # Usage:
 # ./divali.sh exp_type modality sample_name R1 R3 threads path_bwa path_refDB
+# e.g.:
 # ./divali.sh nanoCT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa
 
 # Install bwa-mem2 and index the ref
