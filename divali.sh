@@ -7,8 +7,8 @@
 #   Aligned BAM
 
 # Usage:
-# ./divali.sh nanoCT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20
-# ./divali.sh exp_type modality sample_name R1 R3 threads
+# ./divali.sh exp_type modality sample_name R1 R3 threads path_bwa path_refDB
+# ./divali.sh nanoCT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -
@@ -23,6 +23,8 @@ sample_name="${3}";
 R1="${4}";
 R3="${5}";
 threads="${6}";
+path_bwa="${7}";
+path_refDB="${8}";
 
 if [ ${#@} -lt 6 ] ; then
     printf '\nUsage:\n';
@@ -33,6 +35,8 @@ if [ ${#@} -lt 6 ] ; then
     printf '        R1 \\\n';
     printf '        R3 \\\n';
     printf '        threads \\\n';
+    printf '        path_bwa \\\n';
+    printf '        path_refDB \\\n';
     printf 'Parameters:\n';
     printf '  - exp_type: Experience type (ie. nanoCT).\n';
     printf '  - modality: Modality.\n';
@@ -50,7 +54,7 @@ library="${sample_name}.${modality}" #sample_name.modality
 platform="ILLUMINA" #technology
 
 # Alignement
-./bwa-mem2-2.2.1_x64-linux/bwa-mem2 mem hg19.fa \
+${path_bwa} mem ${path_refDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
