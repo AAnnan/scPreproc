@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # Purpose:
-#   To align R1 & R3 as built and corrected by divmux.codon
+#   To align R1 & R3 Fastqs as built and corrected by divmux.codon
 
 # Return:
 #   Aligned BAM
 
 # Usage:
 # ./divali.sh nanoCT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20
+# ./divali.sh exp_type modality sample_name R1 R3 threads
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -

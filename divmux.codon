@@ -1,5 +1,5 @@
 import sys
-import bio
+import bio # codon (seq) plugin
 from utils import *
 
 ## Install
