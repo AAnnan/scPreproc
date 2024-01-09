@@ -108,7 +108,7 @@ def correct_barcodes_from_fastq(
     # Get total number of reads
     len_record = len(R1_lines)//4
     # Get the size of a 1000th of the read number
-    prog_1000th = len_record//1000
+    prog_100th = len_record//100
     # Initialize Barcode and quality lists
     corr_bcs = List[str](capacity=len_record)
     seq_bcs = List[str](capacity=len_record)
@@ -119,11 +119,11 @@ def correct_barcodes_from_fastq(
         total_reads += 1
 
         # Output progress
-        if total_reads % prog_1000th == 0:
-            sys.stdout.write(f"\rProgress: {(100*total_reads/len_record):.1f}%")
+        if total_reads % prog_100th == 0:
+            sys.stdout.write(f"\r{int(100*total_reads/len_record)}%")
             sys.stdout.flush()
         if total_reads == len_record:
-            sys.stdout.write(f"\rProgress: 100.0%")
+            sys.stdout.write("\r")
             sys.stdout.flush()
 
         # Get barcode sequence and associated quality from FASTQ record
@@ -155,8 +155,19 @@ def correct_barcodes_from_fastq(
             corr_bcs.append('NoMatch')
     
     # Modify R1,R3 read names, adds CB tag if BC found at max distance
-    sys.stdout.write("\nModifying R1, R3 read names\n")
+    sys.stdout.write("Modifying R1, R3 read names...\n")
+    total_reads = 0
     for i in range(0, len(R1_lines), 4):
+        # Tally processed reads
+        total_reads += 1
+        # Output progress
+        if total_reads % prog_100th == 0:
+            sys.stdout.write(f"\r{int(100*total_reads/len_record)}%")
+            sys.stdout.flush()
+        if total_reads == len_record:
+            sys.stdout.write("\r")
+            sys.stdout.flush()
+
         if corr_bcs[i//4] == 'NoMatch':
             R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + '\n'
             R3_lines[i] = R3_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + '\n'
@@ -197,17 +208,16 @@ def correct_barcodes_from_fastq(
         corrected_bc_stats_tsv_fh.write(stats_tsv)
 
     # print the stats 
-    sys.stdout.write(f'\n{stats_tsv}\n')
+    sys.stdout.write(f'\n{stats_tsv}\n\n')
 
     return frac_bcs_found
 
 
 def main():
-    # Check if the correct number of arguments is passed
-    if len(sys.argv) != 7:
+    # Check that the correct number of arguments are passed
+    if not (isinstance(BC_LEN, int) and isinstance(BC_START, int) and len(sys.argv) == 7):
         sys.stderr.write(
-            f"\nExiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> {sys.argv[0]} \
-            R2.fastq.gz R1.fastq R3.fastq whitelist.txt output_stats.tsv <max_hamming_dist>\n")
+            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> {sys.argv[0]} R2.fastq.gz R1.fastq R3.fastq whitelist.txt output_stats.tsv <max_hamming_dist>\n\n")
         sys.exit(1)
     else:
         R2 = sys.argv[1]
