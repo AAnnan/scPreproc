@@ -9,7 +9,7 @@
 Values for BC_LEN and BC_START need to be passed when invoking codon!
 
 ### 2) Alignment (divali.sh):
-- Have [**bwa**](https://github.com/lh3/bwa) or faster yet, [**bwa-mem2**](https://github.com/bwa-mem2/bwa-mem2) binaries and [**samtools**](https://github.com/samtools/samtools) installed.
+- Have [**bwa**](https://github.com/lh3/bwa), or faster yet, [**bwa-mem2**](https://github.com/bwa-mem2/bwa-mem2) binaries and [**samtools**](https://github.com/samtools/samtools) installed.
 
 - Run script like this:
 
