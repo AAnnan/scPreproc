@@ -134,19 +134,19 @@ def correct_barcodes_from_fastq(
             sys.stdout.flush()
 
         # Get barcode sequence and associated quality from FASTQ record
-        bc_seq:str
+        bc_seq:bio.seq
         bc_qual:str
         if rev_comp:
             # reverse complemented
-            bc_seq = str(~(record.seq[start_pos_bc:start_pos_bc+bc_length_i]))[0]
+            bc_seq = ~(record.seq[start_pos_bc:start_pos_bc+bc_length_i])
             bc_qual = record.qual[start_pos_bc:start_pos_bc+bc_length_i][::-1]
         else:
             # Forward
-            bc_seq = str(record.seq[start_pos_bc:start_pos_bc+bc_length_i])[0]
+            bc_seq = record.seq[start_pos_bc:start_pos_bc+bc_length_i]
             bc_qual = record.qual[start_pos_bc:start_pos_bc+bc_length_i]
 
         # Store the original sequence and quality 
-        seq_bcs.append(bc_seq)
+        seq_bcs.append(str(bc_seq))
         qual_bcs.append(bc_qual)
 
         # Get the corrected bc (even HD=0)
@@ -178,13 +178,17 @@ def correct_barcodes_from_fastq(
         if total_reads == len_record:
             sys.stdout.write("\r")
             sys.stdout.flush()
-
+        line_corr:str
         if corr_bcs[i//4] == 'NoMatch':
-            R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + '\n'
-            R3_lines[i] = R3_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + '\n'
+            line_corr = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + '\n'
+            R1_lines[i] = line_corr
+            line_corr = R3_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + '\n'
+            R3_lines[i] = line_corr
         else:
-            R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
-            R3_lines[i] = R3_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
+            line_corr = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
+            R1_lines[i] = line_corr
+            line_corr = R3_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
+            R3_lines[i] = line_corr
 
     # Write new FASTQs for R1, R3
     sys.stdout.write("Writing corrected R1, R3\n")
