@@ -12,6 +12,8 @@ from utils import *
 # codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 divmux.codon R2.fastq.gz R1.fastq R3.fastq whitelist.txt output_stats.tsv 1
 # e.g.:
 # codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 divmux.codon ScKDMA_S1_R2_001.fastq.gz ScKDMA_S1_R1_001.fastq ScKDMA_S1_R3_001.fastq whitelist_10xATAC_737K-cratac-v1.txt ScKDMA_S1_BC_stats.tsv 1
+## With Seq installed only:
+# seqc run -release -D BC_LEN=16 -D BC_START=29 divmux.codon R2.fastq.gz R1.fastq R3.fastq whitelist.txt output_stats.tsv 1 
 
 # Build exec with: (not very useful as exec still need to be run with codon)
 # codon build -plugin seq -release -exe -D BC_LEN=16 -D BC_START=29 divmux.codon
@@ -49,7 +51,8 @@ def read_barcode_whitelist_from_file(
     sys.stdout.write(f"Importing whitelist: {bc_whitelist_filename}\n")
     bc_whitelist = set()
     with open(bc_whitelist_filename, "r") as fh:
-        [bc_whitelist.add(Kmer[bc_length_i](seq(bc_line.strip()))) for bc_line in fh]
+        for bc_line in fh:
+            bc_whitelist.add(Kmer[bc_length_i](seq(bc_line.strip())))
     return bc_whitelist
 
 def correct_barcodes_from_fastq(
@@ -96,6 +99,8 @@ def correct_barcodes_from_fastq(
 
     # Store all reads of R1 and R3
     sys.stdout.write("Importing R1, R3\n")
+    R1_lines = List[str]
+    R3_lines = List[str]
     with open(R1, 'r') as R1_fh, open(R3, 'r') as R3_fh:
         R1_lines = R1_fh.readlines()
         R3_lines = R3_fh.readlines()
@@ -106,8 +111,10 @@ def correct_barcodes_from_fastq(
     # Store number of reads which have hamming distance of 0, 1, 2 or 3 from barcodes whitelist.
     bc_mismatches_stats = [0, 0, 0, 0]
     # Get total number of reads
+    len_record:int
     len_record = len(R1_lines)//4
     # Get the size of a 1000th of the read number
+    prog_100th:int
     prog_100th = len_record//100
     # Initialize Barcode and quality lists
     corr_bcs = List[str](capacity=len_record)
@@ -127,15 +134,19 @@ def correct_barcodes_from_fastq(
             sys.stdout.flush()
 
         # Get barcode sequence and associated quality from FASTQ record
+        bc_seq:str
+        bc_qual:str
         if rev_comp:
             # reverse complemented
-            bc_seq, bc_qual = ((~(record.seq[start_pos_bc:start_pos_bc+bc_length_i]), record.qual[start_pos_bc:start_pos_bc+bc_length_i][::-1]))
+            bc_seq = str(~(record.seq[start_pos_bc:start_pos_bc+bc_length_i]))[0]
+            bc_qual = record.qual[start_pos_bc:start_pos_bc+bc_length_i][::-1]
         else:
             # Forward
-            bc_seq, bc_qual = (record.seq[start_pos_bc:start_pos_bc+bc_length_i], record.qual[start_pos_bc:start_pos_bc+bc_length_i])
+            bc_seq = str(record.seq[start_pos_bc:start_pos_bc+bc_length_i])[0]
+            bc_qual = record.qual[start_pos_bc:start_pos_bc+bc_length_i]
 
         # Store the original sequence and quality 
-        seq_bcs.append(str(bc_seq))
+        seq_bcs.append(bc_seq)
         qual_bcs.append(bc_qual)
 
         # Get the corrected bc (even HD=0)
@@ -214,6 +225,12 @@ def correct_barcodes_from_fastq(
 
 
 def main():
+    R2:str
+    R1:str
+    R3:str
+    nanoCT_singlecell_bc_whitelist_filename:str
+    corrected_bc_stats_tsv_filename:str
+    max_mismatches:int
     # Check that the correct number of arguments are passed
     if not (isinstance(BC_LEN, int) and isinstance(BC_START, int) and len(sys.argv) == 7):
         sys.stderr.write(
@@ -226,10 +243,10 @@ def main():
         nanoCT_singlecell_bc_whitelist_filename = sys.argv[4]
         corrected_bc_stats_tsv_filename = sys.argv[5]
         max_mismatches = int(sys.argv[6])
-    # Check that the max_mismatches is 0, 1, 2 or 3
-    if max_mismatches not in [0,1,2,3]:
-        sys.stderr.write(f"\nExiting...\n<max_hamming_dist> must be 0, 1, 2 or 3\n")
-        sys.exit(1)
+        # Check that the max_mismatches is 0, 1, 2 or 3
+        if max_mismatches not in [0,1,2,3]:
+            sys.stderr.write(f"\nExiting...\n<max_hamming_dist> must be 0, 1, 2 or 3\n")
+            sys.exit(1)
 
     # Read cell barcodes from file and convert to a set of Kmers.
     nanoCT_singlecell_bc_whitelist = read_barcode_whitelist_from_file(
