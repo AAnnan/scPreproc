@@ -63,7 +63,7 @@ def correct_barcodes_from_fastq(
     max_hamming_dist: int,
     min_frac_bcs_to_find: float,
     rev_comp: bool
-):
+) -> float:
     """
     Read nanoCT artifical BC FASTQ with 16bp cell barcode
     Add corrected BCs to R1 R3 FASTQs
@@ -177,8 +177,14 @@ def correct_barcodes_from_fastq(
 
     # Write new FASTQs for R1, R3
     sys.stdout.write("Writing corrected R1, R3\n")
-    open(R1.rstrip('.fastq')+'_correct.fastq', 'w').write(''.join(R1_lines))
-    open(R3.rstrip('.fastq')+'_correct.fastq', 'w').write(''.join(R3_lines))
+    R1_corr = R1.rstrip('.fastq') + '_correct.fastq'
+    with open(R1_corr, 'w') as file:
+        file.write(''.join(R1_lines))
+    R3_corr = R3.rstrip('.fastq') + '_correct.fastq'
+    with open(R3_corr, 'w') as file:
+        file.write(''.join(R3_lines))
+    #open(R1.rstrip('.fastq')+'_correct.fastq', 'w').write(''.join(R1_lines))
+    #open(R3.rstrip('.fastq')+'_correct.fastq', 'w').write(''.join(R3_lines))
 
     # Calculate number of reads with/without a barcode.
     bc_reads = sum(bc_mismatches_stats)
