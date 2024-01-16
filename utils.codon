@@ -4,7 +4,7 @@ from bio import *
 def get_qual_sorted_idx(qual):
     """
     Sort quality scores from low to high and return the index positions of the sorted
-    array.
+    array. (sorted is a in-built funciton of bio)
 
     """
     qual_sorted_idx = list(
@@ -36,6 +36,7 @@ def hamming_dist1_neighbors_by_qual_order(kmer, qual):
     for i in range(len(kmer)):
         for b in (k"A", k"C", k"G", k"T"):
             if kmer[qual_sorted_idx[i]] != b:
+                #base(kmer, idx, b) returns a new kmer equal to K but with the base at index idx set to b
                 yield kmer |> base(qual_sorted_idx[i], b)
 
 

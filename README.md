@@ -1,5 +1,5 @@
 ## scPreproc
-### 1) Demultiplexing (divmux.codon):
+### 1) Demultiplexing (01_divmux.codon):
 - Have [**codon**](https://github.com/exaloop/codon#install) and [**seq**](https://github.com/exaloop/seq#installation) installed.
 
 - Run script like this:
@@ -8,7 +8,7 @@
 
 Values for BC_LEN and BC_START need to be passed when invoking codon!
 
-### 2) Alignment (divali.sh):
+### 2) Alignment (02_divali.sh):
 - Have [**bwa**](https://github.com/lh3/bwa), or faster yet, [**bwa-mem2**](https://github.com/bwa-mem2/bwa-mem2) binaries and [**samtools**](https://github.com/samtools/samtools) installed.
 
 - Run script like this:
