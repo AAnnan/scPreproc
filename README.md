@@ -8,9 +8,9 @@
 
 Values for BC_LEN and BC_START need to be passed when invoking codon!
 
-### 2) Alignment (02_divali.sh):
+### 2) Alignment (02_divalign.sh):
 - Have [**bwa**](https://github.com/lh3/bwa), or faster yet, [**bwa-mem2**](https://github.com/bwa-mem2/bwa-mem2) binaries and [**samtools**](https://github.com/samtools/samtools) installed.
 
 - Run script like this:
 
-`./02_divali.sh exp_type modality sample_name R1.fastq R3.fastq threads path_bwa path_refDB`
+`./02_divalign.sh exp_type modality sample_name R1.fastq R3.fastq threads path_bwa path_bwarefDB`
