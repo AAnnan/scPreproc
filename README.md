@@ -12,8 +12,7 @@ e.g.:
 
 Values for BC_LEN and BC_START need to be passed when invoking codon!
 
-- Output (in script dir)
-
+- Output (in script dir):
 `<Path_R1_unzipped>_correct.fastq`
 `<Path_R3_unzipped>_correct.fastq`
 `<Path_output_stats.tsv>`
@@ -29,5 +28,5 @@ e.g.:
 
 `./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20 /home/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/refBWAmem2/hg19.fa`
 
-- Output (in script dir)
+- Output (in script dir):
 `<sample_name>.<modality>.<exp_type>.bam`
