@@ -59,11 +59,7 @@ ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
-${R1} ${R3} > temp.sam
-
-samtools view -@ ${threads} -hb --output ${RGID}.bam temp.sam
-
-rm temp.sam
+${R1} ${R3} | samtools view -bS -o ${RGID}.bam -
 
 # UNUSED CODE
 # Get alignement stats
