@@ -27,7 +27,7 @@ threads="${6}";
 path_bwa="${7}";
 path_bwarefDB="${8}";
 
-if [ ${#@} -lt 6 ] ; then
+if [ ${#@} -lt 8 ] ; then
     printf '\nUsage:\n';
     printf '    02_divalign.sh \\\n';
     printf '        exp_type \\\n';
