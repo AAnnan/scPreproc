@@ -62,10 +62,17 @@ ${path_bwa} mem ${path_bwarefDB} \
 ${R1} ${R3} | samtools view -bS --threads 4 -o ${RGID}.bam -
 
 # UNUSED CODE
+
+# Convert Peak BED file to SAF format
+#awk 'OFS="\t" {print $1"."$2"."$3, $1, $2+1, $3, "."}' ${inputBEDFile} > ${outputSAFFile}
+#sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' ${outputSAFFile}
+# if you're not confident in your sed version (ie using a mac), change the above line to this:
+#echo -e "GeneID\tChr\tStart\tEnd\tStrand" | cat - ${outputSAFFile} > temp && mv temp ${outputSAFFile}
+
 # Get alignement stats
 #samtools flagstat -@ ${threads} ${RGID}.bam
 
-# Split by BC (creates too many files)
+# Split by BC (WILL CRASH YOUR SYSTEM creates too many files)
 #samtools split -@ ${threads} --max-split '-1' -u NoBarcode.sam -f "%*_%\!" -d 'CB' -v ${RGID}.bam
 
 #Get list of unique BCs in SAM file
