@@ -61,13 +61,88 @@ ${path_bwa} mem ${path_bwarefDB} \
 -C \
 ${R1} ${R3} | samtools view -bS --threads 4 -o ${RGID}.bam -
 
-# UNUSED CODE
 
 # Convert Peak BED file to SAF format
 #awk 'OFS="\t" {print $1"."$2"."$3, $1, $2+1, $3, "."}' ${inputBEDFile} > ${outputSAFFile}
 #sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' ${outputSAFFile}
 # if you're not confident in your sed version (ie using a mac), change the above line to this:
 #echo -e "GeneID\tChr\tStart\tEnd\tStrand" | cat - ${outputSAFFile} > temp && mv temp ${outputSAFFile}
+
+awk '
+BEGIN {
+    FS="\t";    # Set field separator as tab
+    OFS="\t";   # Set output field separator as tab
+}
+{
+    # Skip lines starting with "@"
+    if (substr($0, 1, 1) == "@") {
+        print;  # Print the line as it is
+        next;   # Skip processing the rest of the script for this line
+    }
+
+    # Use the match function to extract the string following RG:Z: and CB:Z:
+    match($0, /RG:Z:([^[:space:]]+)/, rg);
+    match($0, /CB:Z:([^[:space:]]+)/, cb);
+
+    # If both rg and cb arrays have values
+    if (rg[1] && cb[1]) {
+        # Replace the string following RG:Z: with the string following CB:Z:
+        sub("RG:Z:" rg[1], "RG:Z:" cb[1]);
+        # Print the modified line
+        print
+    } else {
+        # If either rg or cb array is empty, print the line as it is
+        print
+    }
+}' hdTEST.sam > hdTESTRG.sam
+
+awk -v all_pl="${platform}" -v all_sm="${sample_name}" -v all_lb="${library}" '
+BEGIN {
+    FS="\t";    # Set field separator as tab
+    OFS="\t";   # Set output field separator as tab
+    # Declare an associative array to store unique Barcodes
+    # This will act as a set to keep track of seen Barcodes
+    delete barcodes;
+}
+{
+    # Skip lines starting with "@" (header lines)
+    if (substr($0, 1, 1) == "@") {
+        if ($1 == "@RG") {
+            # Skip the original @RG header line
+            next;
+        } else if ($1 == "@PG") {
+            last_PG_line = $0;
+            next;
+        } else {
+            # Print other header lines as they are
+            print;
+            next;
+        }
+    }
+
+    # Use the match function to extract the Barcode from CB:Z:
+    match($0, /CB:Z:([^[:space:]]+)/, cb);
+    if (cb[1]) {
+        # Store the extracted Barcode in the associative array
+        barcodes[cb[1]] = 1;
+    }
+}
+END {
+    # Output the new @RG header lines with unique Barcodes
+    for (barcode in barcodes) {
+        # Construct the @RG line with the unique Barcode
+        rg_line = "@RG\tID:" barcode "\tSM:" all_sm "\tLB:" all_lb "\tPL:" all_pl;
+        # Print the new @RG line
+        print rg_line;
+    }
+    # Print the last @PG line
+    print last_PG_line;
+}' hdTEST.sam > hdTESTHEADER.sam
+
+# Remove lines starting with '@' in A.txt, concatenate B.txt at the header, and output to C.txt
+{ cat hdTESTHEADER.sam; grep -v '^@' hdTESTRG.sam; } | samtools view -bS --threads 4 -o ${RGID}.bam -
+
+# UNUSED CODE
 
 # Get alignement stats
 #samtools flagstat -@ ${threads} ${RGID}.bam
