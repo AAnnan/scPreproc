@@ -76,6 +76,9 @@ awk -v threshold="$minReadsperBC" '{ if ($1 > threshold) print $2 > "'"$pass_f"'
 # split sam file using the above threshold file
 samtools view -h --tag-file CB:"${pass_f}" TEMPUNFILT.sam > TEMP.sam
 
+# number of reads per barcode 
+grep -o 'CB:Z:[ACGT]*' TEMP.sam| sed 's/CB:Z://' | sort | uniq -c | sed 's/ \+/\t/g' > ${RGID}_reads_per_barcode_post_filtering_${minReadsperBC}.tsv
+
 # replace RG:Z: with CB:Z:
 awk '
 BEGIN {
