@@ -59,8 +59,18 @@ ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
-${R1} ${R3} > TEMP.sam
+${R1} ${R3} > TEMPUNFILT.sam
 
+grep -o 'CB:Z:[ACGT]*' TEMPUNFILT.sam | sed 's/CB:Z://' | sort | uniq -c > reads_per_barcode
+
+threshold=200
+above_threshold_file="above_${threshold}_barcodes"
+below_threshold_file="below_${threshold}_barcodes"
+awk -v threshold="$threshold" '{ if ($1 > threshold) print $2 > "'"$above_threshold_file"'"; else print $2 > "'"$below_threshold_file"'" }' reads_per_barcode
+
+samtools view -h --tag-file CB:"${above_threshold_file}" TEMPUNFILT.sam > TEMP.sam
+
+# replace RG:Z: with CB:Z:
 awk '
 BEGIN {
     FS="\t";    # Set field separator as tab
@@ -83,6 +93,7 @@ BEGIN {
     print
 }' TEMP.sam > TEMPRG.sam
 
+# Build new header with unique BCs
 awk '
 BEGIN {
     FS="\t";    # Set field separator as tab
@@ -129,18 +140,18 @@ END {
     print last_PG_line;
 }' TEMP.sam > TEMPHEADER.sam
 
-# Remove lines starting with '@' in A.txt, concatenate B.txt at the header, and output to C.txt
+# Append the new header to the RG:Z: replaced SAM file and convert to BAM
 { cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | samtools view -bS --threads ${threads} -o ${RGID}.bam -
-rm TEMP.sam TEMPRG.sam TEMPHEADER.sam
+rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam
 
-# Convert Peak BED file to SAF format
+# Convert MACS Peak BED file to SAF format
 awk 'OFS="\t" {print $1"."$2"."$3"."$4, $1, $2+1, $3, "."}' ${inputBEDFile} > ${outputSAFFile}
 sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' ${outputSAFFile}
 # if you're not confident in your sed version (ie using a mac), change the above line to this:
 #echo -e "GeneID\tChr\tStart\tEnd\tStrand" | cat - ${outputSAFFile} > temp && mv temp ${outputSAFFile}
 
-featureCounts -T ${threads} -a <input saf file> -F SAF -p --byReadGroup -O -o ${RGID}.tsv ${RGID}.bam
-
+# install subread/featurecounts: "conda install bioconda::subread"
+featureCounts -T ${threads} -a ${outputSAFFile} -F SAF -p --byReadGroup -O -o ${RGID}.tsv ${RGID}.bam
 
 # UNUSED CODE
 
