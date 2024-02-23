@@ -9,7 +9,7 @@
 # Usage:
 # ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB>
 # e.g.:
-# ./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20 /home/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/refBWAmem2/hg19.fa
+# ./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20 /home/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/refBWAmem2/hg19.fa 200
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -
@@ -26,6 +26,7 @@ R3="${5}";
 threads="${6}";
 path_bwa="${7}";
 path_bwarefDB="${8}";
+minReadsperBC="${9}";
 
 if [ ${#@} -lt 8 ] ; then
     printf '\nUsage:\n';
@@ -45,12 +46,15 @@ if [ ${#@} -lt 8 ] ; then
     printf '  - R1:   Path to corrected FASTQ R1 (uncompressed).\n';
     printf '  - R3:   Path to corrected FASTQ R3 (uncompressed).\n';
     printf '  - threads: Number of threads to align with.\n';
+    printf '  - path_bwa: Path to BWA binary.\n';
+    printf '  - path_bwarefDB: Path to BWA DB w/ extension (ex:hg19.fa) .\n';
+    printf '  - minReadsperBC: Minimum number of reads per barcode.\n';
     printf 'Purpose: Align R1 & R3 as built by Divmux\n';
     printf '         Output is a bam file of name <sample_name.modality.exp_type.bam> \n\n';
     exit 1
 fi
 
-RGID="${sample_name}.${modality}.${exp_type}" #sample_name.modality.exp_type
+RGID="${sample_name}-${modality}-${exp_type}" #sample_name.modality.exp_type
 library="${sample_name}.${modality}" #sample_name.modality
 platform="ILLUMINA" #technology
 
@@ -61,14 +65,16 @@ ${path_bwa} mem ${path_bwarefDB} \
 -C \
 ${R1} ${R3} > TEMPUNFILT.sam
 
-grep -o 'CB:Z:[ACGT]*' TEMPUNFILT.sam | sed 's/CB:Z://' | sort | uniq -c > reads_per_barcode
+# number of reads per barcode 
+grep -o 'CB:Z:[ACGT]*' TEMPUNFILT.sam | sed 's/CB:Z://' | sort | uniq -c | sed 's/ \+/\t/g' > ${RGID}_reads_per_barcode.tsv
 
-threshold=200
-above_threshold_file="above_${threshold}_barcodes"
-below_threshold_file="below_${threshold}_barcodes"
-awk -v threshold="$threshold" '{ if ($1 > threshold) print $2 > "'"$above_threshold_file"'"; else print $2 > "'"$below_threshold_file"'" }' reads_per_barcode
+# Filter for number of reads per barcode
+pass_f="${RGID}_passing_barcodes_${minReadsperBC}"
+fail_f="${RGID}_failing_barcodes_${minReadsperBC}"
+awk -v threshold="$minReadsperBC" '{ if ($1 > threshold) print $2 > "'"$pass_f"'"; else print $2 > "'"$fail_f"'" }' ${RGID}_reads_per_barcode.tsv
 
-samtools view -h --tag-file CB:"${above_threshold_file}" TEMPUNFILT.sam > TEMP.sam
+# split sam file using the above threshold file
+samtools view -h --tag-file CB:"${pass_f}" TEMPUNFILT.sam > TEMP.sam
 
 # replace RG:Z: with CB:Z:
 awk '
@@ -140,15 +146,15 @@ END {
     print last_PG_line;
 }' TEMP.sam > TEMPHEADER.sam
 
-# Append the new header to the RG:Z: replaced SAM file and convert to BAM
+# Append the new header to the RG-replaced SAM file and convert to BAM
 { cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | samtools view -bS --threads ${threads} -o ${RGID}.bam -
 rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam
 
-# Convert MACS Peak BED file to SAF format
+# Convert Peak BED file to SAF format
 awk 'OFS="\t" {print $1"."$2"."$3"."$4, $1, $2+1, $3, "."}' ${inputBEDFile} > ${outputSAFFile}
 sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' ${outputSAFFile}
 # if you're not confident in your sed version (ie using a mac), change the above line to this:
-#echo -e "GeneID\tChr\tStart\tEnd\tStrand" | cat - ${outputSAFFile} > temp && mv temp ${outputSAFFile}
+#echo -e "GeneID\tChr\tStart\tEnd\tStrand" | cat - ${inputBEDFile} > temp && mv temp ${outputSAFFile}
 
 # install subread/featurecounts: "conda install bioconda::subread"
 featureCounts -T ${threads} -a ${outputSAFFile} -F SAF -p --byReadGroup -O -o ${RGID}.tsv ${RGID}.bam
