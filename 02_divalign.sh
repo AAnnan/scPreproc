@@ -59,14 +59,7 @@ ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
-${R1} ${R3} | samtools view -bS --threads 4 -o ${RGID}.bam -
-
-
-# Convert Peak BED file to SAF format
-#awk 'OFS="\t" {print $1"."$2"."$3, $1, $2+1, $3, "."}' ${inputBEDFile} > ${outputSAFFile}
-#sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' ${outputSAFFile}
-# if you're not confident in your sed version (ie using a mac), change the above line to this:
-#echo -e "GeneID\tChr\tStart\tEnd\tStrand" | cat - ${outputSAFFile} > temp && mv temp ${outputSAFFile}
+${R1} ${R3} > TEMP.sam
 
 awk '
 BEGIN {
@@ -77,29 +70,24 @@ BEGIN {
     # Skip lines starting with "@"
     if (substr($0, 1, 1) == "@") {
         print;  # Print the line as it is
-        next;   # Skip processing the rest of the script for this line
+        next;  # Skip to the next line
     }
 
     # Use the match function to extract the string following RG:Z: and CB:Z:
     match($0, /RG:Z:([^[:space:]]+)/, rg);
     match($0, /CB:Z:([^[:space:]]+)/, cb);
 
-    # If both rg and cb arrays have values
-    if (rg[1] && cb[1]) {
-        # Replace the string following RG:Z: with the string following CB:Z:
-        sub("RG:Z:" rg[1], "RG:Z:" cb[1]);
-        # Print the modified line
-        print
-    } else {
-        # If either rg or cb array is empty, print the line as it is
-        print
-    }
-}' hdTEST.sam > hdTESTRG.sam
+    # Replace the string following RG:Z: with the string following CB:Z:
+    sub("RG:Z:" rg[1], "RG:Z:" cb[1]);
+    # Print the modified line
+    print
+}' TEMP.sam > TEMPRG.sam
 
-awk -v all_pl="${platform}" -v all_sm="${sample_name}" -v all_lb="${library}" '
+awk '
 BEGIN {
     FS="\t";    # Set field separator as tab
     OFS="\t";   # Set output field separator as tab
+
     # Declare an associative array to store unique Barcodes
     # This will act as a set to keep track of seen Barcodes
     delete barcodes;
@@ -108,7 +96,9 @@ BEGIN {
     # Skip lines starting with "@" (header lines)
     if (substr($0, 1, 1) == "@") {
         if ($1 == "@RG") {
-            # Skip the original @RG header line
+            match($0, /SM:([^[:space:]]+)/, all_sm);
+            match($0, /LB:([^[:space:]]+)/, all_lb);
+            match($0, /PL:([^[:space:]]+)/, all_pl);
             next;
         } else if ($1 == "@PG") {
             last_PG_line = $0;
@@ -120,7 +110,7 @@ BEGIN {
         }
     }
 
-    # Use the match function to extract the Barcode from CB:Z:
+    # extract the Barcode from CB:Z:
     match($0, /CB:Z:([^[:space:]]+)/, cb);
     if (cb[1]) {
         # Store the extracted Barcode in the associative array
@@ -131,16 +121,26 @@ END {
     # Output the new @RG header lines with unique Barcodes
     for (barcode in barcodes) {
         # Construct the @RG line with the unique Barcode
-        rg_line = "@RG\tID:" barcode "\tSM:" all_sm "\tLB:" all_lb "\tPL:" all_pl;
+        rg_line = "@RG\tID:" barcode "\tSM:" all_sm[1] "\tLB:" all_lb[1] "\tPL:" all_pl[1];
         # Print the new @RG line
         print rg_line;
     }
     # Print the last @PG line
     print last_PG_line;
-}' hdTEST.sam > hdTESTHEADER.sam
+}' TEMP.sam > TEMPHEADER.sam
 
 # Remove lines starting with '@' in A.txt, concatenate B.txt at the header, and output to C.txt
-{ cat hdTESTHEADER.sam; grep -v '^@' hdTESTRG.sam; } | samtools view -bS --threads 4 -o ${RGID}.bam -
+{ cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | samtools view -bS --threads ${threads} -o ${RGID}.bam -
+rm TEMP.sam TEMPRG.sam TEMPHEADER.sam
+
+# Convert Peak BED file to SAF format
+awk 'OFS="\t" {print $1"."$2"."$3"."$4, $1, $2+1, $3, "."}' ${inputBEDFile} > ${outputSAFFile}
+sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' ${outputSAFFile}
+# if you're not confident in your sed version (ie using a mac), change the above line to this:
+#echo -e "GeneID\tChr\tStart\tEnd\tStrand" | cat - ${outputSAFFile} > temp && mv temp ${outputSAFFile}
+
+featureCounts -T ${threads} -a <input saf file> -F SAF -p --byReadGroup -O -o ${RGID}.tsv ${RGID}.bam
+
 
 # UNUSED CODE
 
@@ -152,3 +152,20 @@ END {
 
 #Get list of unique BCs in SAM file
 #samtools view temp.sam | cut -f 12- | tr "\t" "\n"  | grep  "^CB:Z:"  | cut -d ':' -f 3 | sort | uniq > uniq_BCs
+
+# TESTING CODE
+macs3 callpeak --treatment TESTDONE.bam \
+--format BAMPE \
+--gsize hs \
+--nomodel \
+--nolambda \
+--keep-dup auto \
+--qvalue 0.01 \
+--call-summits \
+--outdir callpeak_TEST \
+--name merged \
+--verbose 2
+
+awk 'OFS="\t" {print $1"."$2"."$3"."$4, $1, $2+1, $3, "."}' TEST.bed > TEST.saf
+sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' TEST.saf
+featureCounts -T 16 -a TEST.saf -F SAF -p --byReadGroup -O -o TESTDONE.tsv TESTDONE.bam
