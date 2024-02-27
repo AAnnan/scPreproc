@@ -7,9 +7,9 @@
 #   Aligned BAM
 
 # Usage:
-# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB> <minReadsperBC>
+# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB>
 # e.g.:
-# ./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20 /home/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/refBWAmem2/hg19.fa 200
+# ./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 16 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -
@@ -26,7 +26,6 @@ R3="${5}";
 threads="${6}";
 path_bwa="${7}";
 path_bwarefDB="${8}";
-minReadsperBC="${9}";
 
 if [ ${#@} -lt 8 ] ; then
     printf '\nUsage:\n';
@@ -48,7 +47,6 @@ if [ ${#@} -lt 8 ] ; then
     printf '  - threads: Number of threads to align with.\n';
     printf '  - path_bwa: Path to BWA binary.\n';
     printf '  - path_bwarefDB: Path to BWA DB w/ extension (ex:hg19.fa) .\n';
-    printf '  - minReadsperBC: Minimum number of reads per barcode.\n';
     printf 'Purpose: Align R1 & R3 as built by Divmux\n';
     printf '         Output is a bam file of name <sample_name.modality.exp_type.bam> \n\n';
     exit 1
@@ -63,21 +61,7 @@ ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
-${R1} ${R3} > TEMPUNFILT.sam
-
-# number of reads per barcode 
-grep -o 'CB:Z:[ACGT]*' TEMPUNFILT.sam | sed 's/CB:Z://' | sort | uniq -c | sed 's/ \+/\t/g' > ${RGID}_reads_per_barcode.tsv
-
-# Filter for number of reads per barcode
-pass_f="${RGID}_passing_barcodes_${minReadsperBC}"
-fail_f="${RGID}_failing_barcodes_${minReadsperBC}"
-awk -v threshold="$minReadsperBC" '{ if ($1 > threshold) print $2 > "'"$pass_f"'"; else print $2 > "'"$fail_f"'" }' ${RGID}_reads_per_barcode.tsv
-
-# split sam file using the above threshold file
-samtools view -h --tag-file CB:"${pass_f}" TEMPUNFILT.sam > TEMP.sam
-
-# number of reads per barcode 
-grep -o 'CB:Z:[ACGT]*' TEMP.sam| sed 's/CB:Z://' | sort | uniq -c | sed 's/ \+/\t/g' > ${RGID}_reads_per_barcode_post_filtering_${minReadsperBC}.tsv
+${R1} ${R3} > TEMP.sam
 
 # replace RG:Z: with CB:Z:
 awk '
@@ -150,20 +134,30 @@ END {
 }' TEMP.sam > TEMPHEADER.sam
 
 # Append the new header to the RG-replaced SAM file and convert to BAM
-{ cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | samtools view -bS --threads ${threads} -o ${RGID}.bam -
+{ cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | samtools sort --threads ${threads} -o ${RGID}.bam -
+
+#Remove temp files
 rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam
 
+# Mark duplicates
+PathPicard="/home/ahrmad/picard.jar"
+RemDups=false
+java -jar ${PathPicard} MarkDuplicates I=${RGID}.bam O=${RGID}_MarkedDup.bam M=${RGID}_DupMetrics.txt REMOVE_DUPLICATES=${RemDups}
+
+### To create the peak/cell matrix
 # Convert Peak BED file to SAF format
-awk 'OFS="\t" {print $1"."$2"."$3"."$4, $1, $2+1, $3, "."}' ${inputBEDFile} > ${outputSAFFile}
-sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' ${outputSAFFile}
+#awk 'OFS="\t" {print $1"."$2"."$3"."$4, $1, $2+1, $3, "."}' ${inputBEDFile} > ${outputSAFFile}
+#sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' ${outputSAFFile}
+
 # if you're not confident in your sed version (ie using a mac), change the above line to this:
 #echo -e "GeneID\tChr\tStart\tEnd\tStrand" | cat - ${inputBEDFile} > temp && mv temp ${outputSAFFile}
 
+#Run featureCounts to count number of reads per peak
 # install subread/featurecounts: "conda install bioconda::subread"
-featureCounts -T ${threads} -a ${outputSAFFile} -F SAF -p --byReadGroup -O -o ${RGID}.tsv ${RGID}.bam
+#featureCounts -T ${threads} -a ${outputSAFFile} -F SAF -p --byReadGroup -O -o ${RGID}.tsv ${RGID}.bam
+
 
 # UNUSED CODE
-
 # Get alignement stats
 #samtools flagstat -@ ${threads} ${RGID}.bam
 
@@ -174,18 +168,22 @@ featureCounts -T ${threads} -a ${outputSAFFile} -F SAF -p --byReadGroup -O -o ${
 #samtools view temp.sam | cut -f 12- | tr "\t" "\n"  | grep  "^CB:Z:"  | cut -d ':' -f 3 | sort | uniq > uniq_BCs
 
 # TESTING CODE
-macs3 callpeak --treatment TESTDONE.bam \
---format BAMPE \
---gsize hs \
---nomodel \
---nolambda \
---keep-dup auto \
---qvalue 0.01 \
---call-summits \
---outdir callpeak_TEST \
---name merged \
---verbose 2
+#macs3 callpeak --treatment TESTDONE.bam \
+#--format BAMPE \
+#--gsize hs \
+#--nomodel \
+#--nolambda \
+#--keep-dup auto \
+#--qvalue 0.01 \
+#--call-summits \
+#--outdir callpeak_TEST \
+#--name merged \
+#--verbose 2
 
-awk 'OFS="\t" {print $1"."$2"."$3"."$4, $1, $2+1, $3, "."}' TEST.bed > TEST.saf
-sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' TEST.saf
-featureCounts -T 16 -a TEST.saf -F SAF -p --byReadGroup -O -o TESTDONE.tsv TESTDONE.bam
+#awk 'OFS="\t" {print $1"."$2"."$3"."$4, $1, $2+1, $3, "."}' TEST.bed > TEST.saf
+#sed -i '1s/^/GeneID\tChr\tStart\tEnd\tStrand\n/' TEST.saf
+#featureCounts -T 16 -a TEST.saf -F SAF -p --byReadGroup -O -o TESTDONE.tsv TESTDONE.bam
+
+#PathPicard="/home/ahrmad/picard.jar"
+#RemDups=false
+#java -jar ${PathPicard} MarkDuplicates I=TESTDONE.bam O=TESTDONE_MarkedDup.bam M=TESTDONE_DupMetrics.txt REMOVE_DUPLICATES=${RemDups}
