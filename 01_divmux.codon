@@ -167,10 +167,10 @@ def correct_barcodes_from_fastq(
     sys.stdout.write(f"Keep only barcodes containing {MIN_READS_IN_BC} reads or more...\n")
     R1_lines = [R1_lines[i] for i in passing_Reads_indices]
     R3_lines = [R3_lines[i] for i in passing_Reads_indices]
+    
     qual_bcs = [qual_bcs[i] for i in passing_BCs_indices]
     seq_bcs = [seq_bcs[i] for i in passing_BCs_indices]
     corr_bcs = [corr_bcs[i] for i in passing_BCs_indices]
-    
         
     # Modify R1,R3 read names, adds CB tag if BC found at max distance
     sys.stdout.write("Modifying R1, R3 read names...\n")
