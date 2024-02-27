@@ -26,6 +26,8 @@ R3="${5}";
 threads="${6}";
 path_bwa="${7}";
 path_bwarefDB="${8}";
+PathPicard="${8}";
+RemDups="${8}";
 
 if [ ${#@} -lt 8 ] ; then
     printf '\nUsage:\n';
@@ -38,6 +40,8 @@ if [ ${#@} -lt 8 ] ; then
     printf '        threads \\\n';
     printf '        path_bwa \\\n';
     printf '        path_bwarefDB \\\n';
+    printf '        PathPicard \\\n';
+    printf '        RemDups \\\n';
     printf 'Parameters:\n';
     printf '  - exp_type: Experience type (ie. nanoCT).\n';
     printf '  - modality: Modality.\n';
@@ -46,9 +50,11 @@ if [ ${#@} -lt 8 ] ; then
     printf '  - R3:   Path to corrected FASTQ R3 (uncompressed).\n';
     printf '  - threads: Number of threads to align with.\n';
     printf '  - path_bwa: Path to BWA binary.\n';
-    printf '  - path_bwarefDB: Path to BWA DB w/ extension (ex:hg19.fa) .\n';
-    printf 'Purpose: Align R1 & R3 as built by Divmux\n';
-    printf '         Output is a bam file of name <sample_name.modality.exp_type.bam> \n\n';
+    printf '  - path_bwarefDB: Path to BWA DB w/ extension (ex:hg19.fa).\n';
+    printf '  - PathPicard: Path to picard.jar.\n';
+    printf '  - RemDups: Remove Duplicates (true) or only mark them (false).\n';
+    printf 'Purpose: Align R1 & R3 as built by divmux codon script\n';
+    printf '         Output is a bam file of name <sample_name>-<modality>-<exp_type>_MarkedDup.bam and associated DupMetrics \n\n';
     exit 1
 fi
 
@@ -136,13 +142,11 @@ END {
 # Append the new header to the RG-replaced SAM file and convert to BAM
 { cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | samtools sort --threads ${threads} -o ${RGID}.bam -
 
-#Remove temp files
-rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam
-
 # Mark duplicates
-PathPicard="/home/ahrmad/picard.jar"
-RemDups=false
 java -jar ${PathPicard} MarkDuplicates I=${RGID}.bam O=${RGID}_MarkedDup.bam M=${RGID}_DupMetrics.txt REMOVE_DUPLICATES=${RemDups}
+
+#Remove temp files
+rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam ${RGID}.bam
 
 ### To create the peak/cell matrix
 # Convert Peak BED file to SAF format
