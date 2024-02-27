@@ -164,7 +164,7 @@ def correct_barcodes_from_fastq(
     passing_BCs_indices = [index for index, item in enumerate(corr_bcs) if item != 'NoMatch' and BC_Counter[item] >= MIN_READS_IN_BC]
     passing_Reads_indices = [x*4 + y for x in passing_BCs_indices for y in range(4)]
     
-    sys.stdout.write(f"Keep only barcodes containing {MIN_READS_IN_BC} reads or more ...\n")
+    sys.stdout.write(f"Keep only barcodes containing {MIN_READS_IN_BC} reads or more...\n")
     R1_lines = [R1_lines[i] for i in passing_Reads_indices]
     R3_lines = [R3_lines[i] for i in passing_Reads_indices]
     qual_bcs = [qual_bcs[i] for i in passing_BCs_indices]
