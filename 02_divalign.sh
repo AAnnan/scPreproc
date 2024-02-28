@@ -65,7 +65,7 @@ platform="ILLUMINA" #technology
 # Alignement
 ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
--R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
+-R "@RG\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
 ${R1} ${R3} | samtools sort --threads 2 -o ${RGID}.bam -
 
