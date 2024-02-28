@@ -29,7 +29,7 @@ path_bwarefDB="${8}";
 PathPicard="${9}";
 RemDups="${10}";
 
-if [ ${#@} -lt 8 ] ; then
+if [ ${#@} -lt 10 ] ; then
     printf '\nUsage:\n';
     printf '    02_divalign.sh \\\n';
     printf '        exp_type \\\n';
