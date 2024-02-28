@@ -26,8 +26,8 @@ R3="${5}";
 threads="${6}";
 path_bwa="${7}";
 path_bwarefDB="${8}";
-PathPicard="${8}";
-RemDups="${8}";
+PathPicard="${9}";
+RemDups="${10}";
 
 if [ ${#@} -lt 8 ] ; then
     printf '\nUsage:\n';
