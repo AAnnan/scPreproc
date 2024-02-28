@@ -19,15 +19,15 @@ Values for BC_LEN, BC_START and MIN_READS_IN_BC need to be passed when invoking 
 `<Path_reads_per_barcode_stats.tsv>`
 
 ### 2) Alignment (02_divalign.sh):
-- Have [**bwa**](https://github.com/lh3/bwa), or faster yet, [**bwa-mem2**](https://github.com/bwa-mem2/bwa-mem2) binaries and [**samtools**](https://github.com/samtools/samtools) installed.
+- Uses [**bwa**](https://github.com/lh3/bwa), or faster yet, [**bwa-mem2**](https://github.com/bwa-mem2/bwa-mem2) binaries, [**samtools**](https://github.com/samtools/samtools) and [**Picard**](https://github.com/broadinstitute/picard/releases/latest).
 
 - Run script like this:
 
-`./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB`
+`./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups>`
 
 e.g.:
 
-`./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 20 /home/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/refBWAmem2/hg19.fa`
+`./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 8 /home/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/refBWAmem2/hg19.fa /home/picard.jar false`
 
 - Output (in script dir):
 `<sample_name>-<modality>-<exp_type>_MarkedDup.bam`
