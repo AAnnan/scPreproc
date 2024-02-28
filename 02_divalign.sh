@@ -7,9 +7,9 @@
 #   Aligned BAM
 
 # Usage:
-# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups>
+# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats>
 # e.g.:
-# ./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 16 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/picard.jar false
+# ./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 16 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/picard.jar false /home/ahrmad/micromamba/envs/ali/bin/samtools /home/ahrmad/ScKDMA_S1.bam /home/ahrmad/ScKDMA_S1_DupMetrics.txt
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -
@@ -28,8 +28,11 @@ path_bwa="${7}";
 path_bwarefDB="${8}";
 PathPicard="${9}";
 RemDups="${10}";
+PathSamtools="${11}";
+PathOutputBam="${12}";
+PathOutputPicardDupStats="${13}";
 
-if [ ${#@} -lt 10 ] ; then
+if [ ${#@} -lt 13 ] ; then
     printf '\nUsage:\n';
     printf '    02_divalign.sh \\\n';
     printf '        exp_type \\\n';
@@ -42,6 +45,9 @@ if [ ${#@} -lt 10 ] ; then
     printf '        path_bwarefDB \\\n';
     printf '        PathPicard \\\n';
     printf '        RemDups \\\n';
+    printf '        PathSamtools \\\n';
+    printf '        PathOutputBam \\\n';
+    printf '        PathOutputPicardDupStats\n';
     printf 'Parameters:\n';
     printf '  - exp_type: Experience type (ie. nanoCT).\n';
     printf '  - modality: Modality.\n';
@@ -53,8 +59,11 @@ if [ ${#@} -lt 10 ] ; then
     printf '  - path_bwarefDB: Path to BWA DB w/ extension (ex:hg19.fa).\n';
     printf '  - PathPicard: Path to picard.jar.\n';
     printf '  - RemDups: Remove Duplicates (true) or only mark them (false).\n';
+    printf '  - PathSamtools: Path to samtools binary.\n';
+    printf '  - PathOutputBam: Path to output BAM file.\n';
+    printf '  - PathOutputPicardDupStats: Path to output Picard Duplication Stats file.\n';
     printf 'Purpose: Align R1 & R3 as built by divmux codon script\n';
-    printf '         Output is a bam file of name <sample_name>-<modality>-<exp_type>_MarkedDup.bam and associated DupMetrics \n\n';
+    printf '         Output is a bam file with marked/removed duplicates and associated duplication metrics \n\n';
     exit 1
 fi
 
@@ -140,10 +149,10 @@ END {
 }' TEMP.sam > TEMPHEADER.sam
 
 # Append the new header to the RG-replaced SAM file and convert to BAM
-{ cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | samtools sort --threads ${threads} -o ${RGID}.bam -
+{ cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | ${PathSamtools} sort --threads ${threads} -o ${RGID}.bam -
 
 # Mark duplicates
-java -jar ${PathPicard} MarkDuplicates I=${RGID}.bam O=${RGID}_MarkedDup.bam M=${RGID}_DupMetrics.txt REMOVE_DUPLICATES=${RemDups}
+java -jar ${PathPicard} MarkDuplicates I=${RGID}.bam O=${PathOutputBam} M=${PathOutputPicardDupStats} REMOVE_DUPLICATES=${RemDups}
 
 #Remove temp files
 rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam ${RGID}.bam
