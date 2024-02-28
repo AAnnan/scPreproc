@@ -188,8 +188,8 @@ def correct_barcodes_from_fastq(
             sys.stdout.write("\r")
             sys.stdout.flush()
 
-        R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
-        R3_lines[i] = R3_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
+        R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}'+ f'\tRG:Z:{corr_bcs[i//4]}' + '\n'
+        R3_lines[i] = R3_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}'+ f'\tRG:Z:{corr_bcs[i//4]}' + '\n'
 
     # Write new FASTQs for R1, R3
     sys.stdout.write("Writing corrected R1, R3\n")

@@ -67,86 +67,13 @@ ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
-${R1} ${R3} > TEMP.sam
-
-# replace RG:Z: with CB:Z:
-awk '
-BEGIN {
-    FS="\t";    # Set field separator as tab
-    OFS="\t";   # Set output field separator as tab
-}
-{
-    # Skip lines starting with "@"
-    if (substr($0, 1, 1) == "@") {
-        print;  # Print the line as it is
-        next;  # Skip to the next line
-    }
-
-    # Use the match function to extract the string following RG:Z: and CB:Z:
-    match($0, /RG:Z:([^[:space:]]+)/, rg);
-    match($0, /CB:Z:([^[:space:]]+)/, cb);
-
-    # Replace the string following RG:Z: with the string following CB:Z:
-    sub("RG:Z:" rg[1], "RG:Z:" cb[1]);
-    # Print the modified line
-    print
-}' TEMP.sam > TEMPRG.sam
-
-# Build new header with unique BCs
-awk '
-BEGIN {
-    FS="\t";    # Set field separator as tab
-    OFS="\t";   # Set output field separator as tab
-
-    # Declare an associative array to store unique Barcodes
-    # This will act as a set to keep track of seen Barcodes
-    delete barcodes;
-}
-{
-    # Skip lines starting with "@" (header lines)
-    if (substr($0, 1, 1) == "@") {
-        if ($1 == "@RG") {
-            match($0, /SM:([^[:space:]]+)/, all_sm);
-            match($0, /LB:([^[:space:]]+)/, all_lb);
-            match($0, /PL:([^[:space:]]+)/, all_pl);
-            next;
-        } else if ($1 == "@PG") {
-            last_PG_line = $0;
-            next;
-        } else {
-            # Print other header lines as they are
-            print;
-            next;
-        }
-    }
-
-    # extract the Barcode from CB:Z:
-    match($0, /CB:Z:([^[:space:]]+)/, cb);
-    if (cb[1]) {
-        # Store the extracted Barcode in the associative array
-        barcodes[cb[1]] = 1;
-    }
-}
-END {
-    # Output the new @RG header lines with unique Barcodes
-    for (barcode in barcodes) {
-        # Construct the @RG line with the unique Barcode
-        rg_line = "@RG\tID:" barcode "\tSM:" all_sm[1] "\tLB:" all_lb[1] "\tPL:" all_pl[1];
-        # Print the new @RG line
-        print rg_line;
-    }
-    # Print the last @PG line
-    print last_PG_line;
-}' TEMP.sam > TEMPHEADER.sam
-
-# Append the new header to the RG-replaced SAM file and convert to BAM
-{ cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | samtools sort --threads ${threads} -o ${RGID}.bam -
+${R1} ${R3} | samtools sort --threads 2 -o ${RGID}.bam -
 
 # Mark duplicates
 java -jar ${PathPicard} MarkDuplicates I=${RGID}.bam O=${RGID}_MarkedDup.bam M=${RGID}_DupMetrics.txt REMOVE_DUPLICATES=${RemDups}
 
 #Remove temp files
-rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam ${RGID}.bam
+#rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam ${RGID}.bam
 
 ### To create the peak/cell matrix
 # Convert Peak BED file to SAF format
