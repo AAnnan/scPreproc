@@ -193,14 +193,16 @@ def correct_barcodes_from_fastq(
 
     # Write new FASTQs for R1, R3
     sys.stdout.write("Writing corrected R1, R3\n")
-    R1_corr = R1.rstrip('.fastq') + '_correct.fastq'
+    R1parts = R1.split('.')
+    R3parts = R3.split('.')
+    R1_corr = '.'.join(R1parts[:-1]) + '_correct' + '.' + R1parts[-1]
+    R3_corr = '.'.join(R3parts[:-1]) + '_correct' + '.' + R3parts[-1]
     with open(R1_corr, 'w') as file:
         file.write(''.join(R1_lines))
-    R3_corr = R3.rstrip('.fastq') + '_correct.fastq'
     with open(R3_corr, 'w') as file:
         file.write(''.join(R3_lines))
-    #open(R1.rstrip('.fastq')+'_correct.fastq', 'w').write(''.join(R1_lines))
-    #open(R3.rstrip('.fastq')+'_correct.fastq', 'w').write(''.join(R3_lines))
+    #open(R1_corr, 'w').write(''.join(R1_lines))
+    #open(R3parts, 'w').write(''.join(R3_lines))
 
     # Calculate number of reads with/without a barcode.
     bc_reads = sum(bc_mismatches_stats)
