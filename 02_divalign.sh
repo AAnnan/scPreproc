@@ -155,7 +155,7 @@ END {
 java -jar ${PathPicard} MarkDuplicates I=${RGID}.bam O=${PathOutputBam} M=${PathOutputPicardDupStats} REMOVE_DUPLICATES=${RemDups}
 
 #Remove temp files
-rm TEMPUNFILT.sam TEMP.sam TEMPRG.sam TEMPHEADER.sam ${RGID}.bam
+rm TEMP.sam TEMPRG.sam TEMPHEADER.sam ${RGID}.bam
 
 ### To create the peak/cell matrix
 # Convert Peak BED file to SAF format
