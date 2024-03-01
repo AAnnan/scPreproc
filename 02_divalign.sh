@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Purpose:
-#   To align R1 & R3 Fastqs as built and corrected by divmux.codon
+#   To align R1 & R2 Fastqs as built and corrected by divmux.codon
 
 # Return:
 #   Aligned BAM
@@ -22,7 +22,7 @@ exp_type="${1}";
 modality="${2}";
 sample_name="${3}";
 R1="${4}";
-R3="${5}";
+R2="${5}";
 threads="${6}";
 path_bwa="${7}";
 path_bwarefDB="${8}";
@@ -39,7 +39,7 @@ if [ ${#@} -lt 13 ] ; then
     printf '        modality \\\n';
     printf '        sample_name \\\n';
     printf '        R1 \\\n';
-    printf '        R3 \\\n';
+    printf '        R2 \\\n';
     printf '        threads \\\n';
     printf '        path_bwa \\\n';
     printf '        path_bwarefDB \\\n';
@@ -53,7 +53,7 @@ if [ ${#@} -lt 13 ] ; then
     printf '  - modality: Modality.\n';
     printf '  - sample_name: Sample name.\n';
     printf '  - R1:   Path to corrected FASTQ R1 (uncompressed).\n';
-    printf '  - R3:   Path to corrected FASTQ R3 (uncompressed).\n';
+    printf '  - R2:   Path to corrected FASTQ R2 (uncompressed).\n';
     printf '  - threads: Number of threads to align with.\n';
     printf '  - path_bwa: Path to BWA binary.\n';
     printf '  - path_bwarefDB: Path to BWA DB w/ extension (ex:hg19.fa).\n';
@@ -62,7 +62,7 @@ if [ ${#@} -lt 13 ] ; then
     printf '  - PathSamtools: Path to samtools binary.\n';
     printf '  - PathOutputBam: Path to output BAM file.\n';
     printf '  - PathOutputPicardDupStats: Path to output Picard Duplication Stats file.\n';
-    printf 'Purpose: Align R1 & R3 as built by divmux codon script\n';
+    printf 'Purpose: Align R1 & R2 as built by divmux codon script\n';
     printf '         Output is a bam file with marked/removed duplicates and associated duplication metrics \n\n';
     exit 1
 fi
@@ -76,7 +76,7 @@ ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
-${R1} ${R3} > TEMP.sam
+${R1} ${R2} > TEMP.sam
 
 # replace RG:Z: with CB:Z:
 awk '

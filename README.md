@@ -4,7 +4,7 @@
 
 - Run script like this:
 
-`codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_R2_gzipped> <Path_R1_unzipped> <Path_R3_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <Hamming_distance_allowed>`
+`codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I1_gzipped_or_not> <Path_R1_unzipped> <Path_R2_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <Hamming_distance_allowed>`
 
 e.g.:
 
@@ -12,7 +12,7 @@ e.g.:
 
 Values for BC_LEN, BC_START and MIN_READS_IN_BC need to be passed when invoking codon!
 
-- Output (in script dir):
+- Output:
 `<Path_R1_unzipped>_correct.fastq`
 `<Path_R3_unzipped>_correct.fastq`
 `<Path_output_stats.tsv>`
@@ -23,7 +23,7 @@ Values for BC_LEN, BC_START and MIN_READS_IN_BC need to be passed when invoking 
 
 - Run script like this:
 
-`./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups>`
+`./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups>`
 
 e.g.:
 

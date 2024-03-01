@@ -10,7 +10,7 @@ from utils import *
 #curl -L https://github.com/exaloop/seq/releases/download/v0.11.3/seq-$(uname -s | awk '{print tolower($0)}')-$(uname -m).tar.gz | tar zxvf - -C .codon/lib/codon/plugins
 
 ## Run script like this:
-# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_R2_gzipped> <Path_R1_unzipped> <Path_R3_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <Hamming_distance_allowed>
+# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I1_gzipped_or_not> <Path_R1_unzipped> <Path_R3_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <Hamming_distance_allowed>
 # e.g.:
 # codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon ScKDMA_S1_R2_001.fastq.gz ScKDMA_S1_R1_001.fastq ScKDMA_S1_R3_001.fastq whitelist_10xATAC_737K-cratac-v1.txt ScKDMA_S1_BC_stats.tsv ScKDMA_S1_reads_per_barcode.tsv 1
 
@@ -25,7 +25,7 @@ from utils import *
 # Minimum percentage of barcodes that should be found before returning with an error.
 min_frac_bcs_to_find_default = 0.5
 
-# By default we reverse-complement the BC read (R2)
+# By default we reverse-complement the BC read (I1)
 # If we find less than 50% matching bcs then we reperform
 # the correction with rev_comp set to False
 rev_comp = True
@@ -55,8 +55,8 @@ def read_barcode_whitelist_from_file(
 
 def correct_barcodes_from_fastq(
     R1:str,
+    I1:str,
     R2:str,
-    R3:str,
     start_pos_bc: Static[int],
     bc_length_i: Static[int],
     nanoCT_singlecell_bc_whitelist: set[Kmer[BC_LEN]],
@@ -68,15 +68,15 @@ def correct_barcodes_from_fastq(
 ) -> float:
     """
     Read nanoCT artifical BC FASTQ with 16bp cell barcode
-    Add corrected BCs to R1 R3 FASTQs
+    Add corrected BCs to R1 R2 FASTQs
 
     Parameters
     ----------
     nanoCT_singlecell_bc_whitelist:
         File with 16bp cell barcode whitelist
-    R1 & R3:
+    R1 & R2:
         Input FASTQ files with normal reads
-    R2:
+    I1:
         Input FASTQ.GZ file with raw barcode reads, made from:
           - 16bp cell barcode 29-45
           (- 8bp modality barcode 0-8)
@@ -88,7 +88,7 @@ def correct_barcodes_from_fastq(
     min_frac_bcs_to_find:
         Required minimum fraction of barcode reads that need to contain a barcode.
     rev_comp:
-        Whether to take the Reverse Complement of the BC in R2 before checking the WL.
+        Whether to take the Reverse Complement of the BC in I1 before checking the WL.
 
     Returns
     -------
@@ -96,15 +96,15 @@ def correct_barcodes_from_fastq(
 
     """
 
-    # Store all reads of R1 and R3
-    sys.stdout.write("Importing R1, R3\n")
-    with open(R1, 'r') as R1_fh, open(R3, 'r') as R3_fh:
+    # Store all reads of R1 and R2
+    sys.stdout.write("Importing R1, R2\n")
+    with open(R1, 'r') as R1_fh, open(R2, 'r') as R3_fh:
         R1_lines = R1_fh.readlines()
         sys.stdout.write(f"R1: {len(R1_lines)//4} reads\n")
         R3_lines = R3_fh.readlines()
-        sys.stdout.write(f"R3: {len(R3_lines)//4} reads\n")
+        sys.stdout.write(f"R2: {len(R3_lines)//4} reads\n")
     
-    sys.stdout.write("R2 Barcode correction...\n")
+    sys.stdout.write("I1 Barcode correction...\n")
     # Store number of reads in FASTQ file.
     total_reads = 0
     # Store number of reads which have hamming distance of 0, 1, 2 or 3 from barcodes whitelist.
@@ -118,7 +118,7 @@ def correct_barcodes_from_fastq(
     seq_bcs = List[str](capacity=len_record)
     qual_bcs = List[str](capacity=len_record)
 
-    for record in bio.FASTQ(R2, gzip=True, validate=False, copy=True):
+    for record in bio.FASTQ(I1, gzip=True, validate=False, copy=True):
         # Tally processed reads
         total_reads += 1
 
@@ -172,8 +172,8 @@ def correct_barcodes_from_fastq(
     seq_bcs = [seq_bcs[i] for i in passing_BCs_indices]
     corr_bcs = [corr_bcs[i] for i in passing_BCs_indices]
         
-    # Modify R1,R3 read names, adds CB tag if BC found at max distance
-    sys.stdout.write("Modifying R1, R3 read names...\n")
+    # Modify R1,R2 read names, adds CB tag if BC found at max distance
+    sys.stdout.write("Modifying R1, R2 read names...\n")
     reads_in_cells = 0
     len_record = len(R1_lines)//4
     
@@ -191,10 +191,10 @@ def correct_barcodes_from_fastq(
         R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
         R3_lines[i] = R3_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
 
-    # Write new FASTQs for R1, R3
-    sys.stdout.write("Writing corrected R1, R3\n")
+    # Write new FASTQs for R1, R2
+    sys.stdout.write("Writing corrected R1, R2\n")
     R1parts = R1.split('.')
-    R3parts = R3.split('.')
+    R3parts = R2.split('.')
     R1_corr = '.'.join(R1parts[:-1]) + '_correct' + '.' + R1parts[-1]
     R3_corr = '.'.join(R3parts[:-1]) + '_correct' + '.' + R3parts[-1]
     with open(R1_corr, 'w') as file:
@@ -253,12 +253,12 @@ def main():
     # Check that the correct number of arguments are passed
     if not (isinstance(BC_LEN, int) and isinstance(BC_START, int) and isinstance(MIN_READS_IN_BC, int) and len(sys.argv) == 8):
         sys.stderr.write(
-            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> -D MIN_READS_IN_BC=<min_reads_in_cells> {sys.argv[0]} R2.fastq.gz R1.fastq R3.fastq whitelist.txt output_stats.tsv output_read_per_barcode.tsv <max_hamming_dist>\n\n")
+            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> -D MIN_READS_IN_BC=<min_reads_in_cells> {sys.argv[0]} I1.fastq.gz R1.fastq R2.fastq whitelist.txt output_stats.tsv output_read_per_barcode.tsv <max_hamming_dist>\n\n")
         sys.exit(1)
     else:
-        R2 = sys.argv[1]
+        I1 = sys.argv[1]
         R1 = sys.argv[2]
-        R3 = sys.argv[3]
+        R2 = sys.argv[3]
         nanoCT_singlecell_bc_whitelist_filename = sys.argv[4]
         corrected_bc_stats_tsv_filename = sys.argv[5]
         reads_per_barcode_tsv_filename = sys.argv[6]
@@ -273,13 +273,13 @@ def main():
         bc_whitelist_filename=nanoCT_singlecell_bc_whitelist_filename,
         bc_length_i=BC_LEN)
 
-    # Read FASTQ with barcodes and write R1 R3 FASTQs with corrected barcodes in CB comment for barcodes
+    # Read FASTQ with barcodes and write R1 R2 FASTQs with corrected barcodes in CB comment for barcodes
     # that match the whitelist closely enough, else only write the original barcodes in CR.
     # Output the fraction of reads that have a barcode
     frac_bcs_found_rev = correct_barcodes_from_fastq(
         R1 = R1,
+        I1 = I1,
         R2 = R2,
-        R3 = R3,
         start_pos_bc=BC_START,
         bc_length_i=BC_LEN,
         nanoCT_singlecell_bc_whitelist=nanoCT_singlecell_bc_whitelist,
@@ -295,11 +295,11 @@ def main():
     # If not we exit with an error
     if frac_bcs_found_rev < min_frac_bcs_to_find_default:
         sys.stdout.write(f"Warning: Only {frac_bcs_found_rev * 100.00}% of the reads have a valid barcode.\n \
-    Barcode correction will be reperformed with R2 as Forward instead of Reverse.\n")
+    Barcode correction will be reperformed with I1 as Forward instead of Reverse.\n")
         frac_bcs_found_for = correct_barcodes_from_fastq(
             R1 = R1,
+            I1 = I1,
             R2 = R2,
-            R3 = R3,
             start_pos_bc=BC_START,
             bc_length_i=BC_LEN,
             nanoCT_singlecell_bc_whitelist=nanoCT_singlecell_bc_whitelist,
