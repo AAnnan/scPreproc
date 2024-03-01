@@ -7,9 +7,9 @@
 #   Aligned BAM
 
 # Usage:
-# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R3_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats>
+# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats>
 # e.g.:
-# ./02_divalign.sh nanoCNT modA ScKDMA_S1 ScKDMA_S1_R1_001_correct.fastq ScKDMA_S1_R3_001_correct.fastq 16 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/picard.jar false /home/ahrmad/micromamba/envs/ali/bin/samtools /home/ahrmad/ScKDMA_S1.bam /home/ahrmad/ScKDMA_S1_DupMetrics.txt
+# ./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 8 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/picard.jar false /home/ahrmad/micromamba/envs/ali/bin/samtools /home/ahrmad/testing/TEST.bam /home/ahrmad/testing/TEST_DupMetrics.txt
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -
@@ -72,13 +72,16 @@ library="${sample_name}.${modality}" #sample_name.modality
 platform="ILLUMINA" #technology
 
 # Alignement
+echo "Aligning ${R1} and ${R2} with BWA-MEM2"
+
 ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
-${R1} ${R2} > TEMP.sam
+${R1} ${R2} > ${RGID}_TEMP.sam
 
 # replace RG:Z: with CB:Z:
+echo "Adding RG tags and header to the alignment file..."
 awk '
 BEGIN {
     FS="\t";    # Set field separator as tab
@@ -99,7 +102,7 @@ BEGIN {
     sub("RG:Z:" rg[1], "RG:Z:" cb[1]);
     # Print the modified line
     print
-}' TEMP.sam > TEMPRG.sam
+}' ${RGID}_TEMP.sam > ${RGID}_TEMPRG.sam
 
 # Build new header with unique BCs
 awk '
@@ -146,17 +149,19 @@ END {
     }
     # Print the last @PG line
     print last_PG_line;
-}' TEMP.sam > TEMPHEADER.sam
+}' ${RGID}_TEMP.sam > ${RGID}_TEMPHEADER.sam
 
 # Append the new header to the RG-replaced SAM file and convert to BAM
-{ cat TEMPHEADER.sam; grep -v '^@' TEMPRG.sam; } | ${PathSamtools} sort --threads ${threads} -o TEMP.bam -
+echo "Sorting alignment..."
+{ cat ${RGID}_TEMPHEADER.sam; grep -v '^@' ${RGID}_TEMPRG.sam; } | ${PathSamtools} sort --threads ${threads} -o ${RGID}_TEMP.bam -
 
 # Mark duplicates
-java -jar ${PathPicard} MarkDuplicates I=TEMP.bam O=${PathOutputBam} M=${PathOutputPicardDupStats} REMOVE_DUPLICATES=${RemDups}
+echo "Marking duplicates..."
+java -jar ${PathPicard} MarkDuplicates I=${RGID}_TEMP.bam O=${PathOutputBam} M=${PathOutputPicardDupStats} REMOVE_DUPLICATES=${RemDups}
 
 #Remove temp files
-rm TEMP.sam TEMPRG.sam TEMPHEADER.sam TEMP.bam
-
+echo "Removing temp files..."
+rm ${RGID}_TEMP.sam ${RGID}_TEMPRG.sam ${RGID}_TEMPHEADER.sam ${RGID}_TEMP.bam
 
 # UNUSED CODE
 # Get alignement stats
