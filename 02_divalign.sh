@@ -158,6 +158,7 @@ echo "Sorting alignment..."
 # Mark duplicates
 echo "Marking duplicates..."
 java -jar ${PathPicard} MarkDuplicates I=${RGID}_TEMP.bam O=${PathOutputBam} M=${PathOutputPicardDupStats} REMOVE_DUPLICATES=${RemDups}
+/home/ahrmad/gatk-4.5.0.0/gatk MarkDuplicatesSpark -I ScKDMA_S1-modA-nanoCNT_TEMP.bam -O TEST_MULTI.bam -M TEST_MULTI_DupMetrics.txt --remove-all-duplicates false --conf "'spark.executor.cores=${threadsmulti}'"
 
 #Remove temp files
 echo "Removing temp files..."
