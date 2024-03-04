@@ -12,7 +12,7 @@ from utils import *
 ## Run script like this:
 # codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I1_gzipped_or_not> <Path_R1_unzipped> <Path_R2_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <Hamming_distance_allowed>
 # e.g.:
-# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=20 01_divmux.codon I1.fq R1.fq R2.fq whitelist.txt demux_stats.tsv reads_per_barcode.tsv 1
+# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=20 01_divmux.codon I1.fq.gz R1.fq R2.fq whitelist.txt demux_stats.tsv reads_per_barcode.tsv 1
 
 # Build exec with: (not very useful as exec still need to be run with codon)
 # codon build -plugin seq -release -exe -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon
@@ -94,12 +94,10 @@ def correct_barcodes_from_fastq(
     """
 
     # Store all reads of R1 and R2
-    sys.stdout.write("Importing R1, R2\n")
-    with open(R1, 'r') as R1_fh, open(R2, 'r') as R2_fh:
+    sys.stdout.write("Importing R1\n")
+    with open(R1, 'r') as R1_fh:
         R1_lines = R1_fh.readlines()
         sys.stdout.write(f"R1: {len(R1_lines)//4} reads\n")
-        R2_lines = R2_fh.readlines()
-        sys.stdout.write(f"R2: {len(R2_lines)//4} reads\n")
     
     sys.stdout.write("I1 Barcode correction...\n")
     # Store number of reads in FASTQ file.
@@ -162,15 +160,13 @@ def correct_barcodes_from_fastq(
     passing_Reads_indices = [x*4 + y for x in passing_BCs_indices for y in range(4)]
     
     sys.stdout.write(f"Keep only barcodes containing {MIN_READS_IN_BC} reads or more...\n")
-    R1_lines = [R1_lines[i] for i in passing_Reads_indices]
-    R2_lines = [R2_lines[i] for i in passing_Reads_indices]
-    
+    R1_lines = [R1_lines[i] for i in passing_Reads_indices]    
     qual_bcs = [qual_bcs[i] for i in passing_BCs_indices]
     seq_bcs = [seq_bcs[i] for i in passing_BCs_indices]
     corr_bcs = [corr_bcs[i] for i in passing_BCs_indices]
         
     # Modify R1,R2 read names, adds CB tag if BC found at max distance
-    sys.stdout.write("Modifying R1, R2 read names...\n")
+    sys.stdout.write("Modifying R1 read names...\n")
     reads_in_cells = 0
     len_record = len(R1_lines)//4
     
@@ -186,21 +182,43 @@ def correct_barcodes_from_fastq(
             sys.stdout.flush()
 
         R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
-        R2_lines[i] = R2_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
 
-    # Write new FASTQs for R1, R2
-    sys.stdout.write("Writing corrected R1, R2 and log files\n\n")
+    # Write new FASTQs for R1
+    sys.stdout.write("Writing corrected R1\n\n")
     R1parts = R1.split('.')
-    R2parts = R2.split('.')
     R1_corr = '.'.join(R1parts[:-1]) + '_correct' + '.' + R1parts[-1]
-    R2_corr = '.'.join(R2parts[:-1]) + '_correct' + '.' + R2parts[-1]
     with open(R1_corr, 'w') as file:
         file.write(''.join(R1_lines))
-    with open(R2_corr, 'w') as file:
-        file.write(''.join(R2_lines))
-    #open(R1_corr, 'w').write(''.join(R1_lines))
-    #open(R2parts, 'w').write(''.join(R2_lines))
+        
 
+    sys.stdout.write("Importing R2\n")
+    with open(R2, 'r') as R2_fh:
+        R1_lines = R2_fh.readlines()
+        sys.stdout.write(f"R2: {len(R1_lines)//4} reads\n")
+    R1_lines = [R1_lines[i] for i in passing_Reads_indices]
+    
+    sys.stdout.write("Modifying R2 read names...\n")
+    reads_in_cells = 0
+    
+    for i in range(0, len(R1_lines), 4):
+        # Tally processed reads
+        reads_in_cells += 1
+        # Output progress
+        if reads_in_cells % prog_100th == 0:
+            sys.stdout.write(f"\r{int(100*reads_in_cells/len_record)}%")
+            sys.stdout.flush()
+        if reads_in_cells == len_record:
+            sys.stdout.write("\r")
+            sys.stdout.flush()
+
+        R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
+    
+    # Write new FASTQs for R1    sys.stdout.write("Writing corrected R2\n\n")
+    R2parts = R2.split('.')
+    R2_corr = '.'.join(R2parts[:-1]) + '_correct' + '.' + R2parts[-1]
+    with open(R2_corr, 'w') as file:
+        file.write(''.join(R1_lines))
+        
     # Calculate number of reads with/without a barcode.
     bc_reads = sum(bc_mismatches_stats)
     reads_without_bc = total_reads - bc_reads
