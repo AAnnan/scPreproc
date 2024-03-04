@@ -9,7 +9,7 @@
 # Usage:
 # ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats>
 # e.g.:
-# ./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 8 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/picard.jar false /home/ahrmad/micromamba/envs/ali/bin/samtools /home/ahrmad/testing/TEST.bam /home/ahrmad/testing/TEST_DupMetrics.txt
+# ./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 8 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/picard.jar false samtools TEST.bam TEST_DupMetrics.txt
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -
@@ -72,9 +72,9 @@ library="${sample_name}.${modality}" #sample_name.modality
 platform="ILLUMINA" #technology
 
 # Alignement
-echo "Aligning ${R1} and ${R2} with BWA-MEM2"
+echo "Aligning ${R1} and ${R2} with ${path_bwa}"
 
-${path_bwa} mem ${path_bwarefDB} \
+time ${path_bwa} mem ${path_bwarefDB} \
 -t ${threads} \
 -R "@RG\tID:${RGID}\tSM:${sample_name}\tLB:${library}\tPL:${platform}" \
 -C \
@@ -82,7 +82,7 @@ ${R1} ${R2} > ${RGID}_TEMP.sam
 
 # replace RG:Z: with CB:Z:
 echo "Adding RG tags and header to the alignment file..."
-awk '
+time awk '
 BEGIN {
     FS="\t";    # Set field separator as tab
     OFS="\t";   # Set output field separator as tab
@@ -105,7 +105,7 @@ BEGIN {
 }' ${RGID}_TEMP.sam > ${RGID}_TEMPRG.sam
 
 # Build new header with unique BCs
-awk '
+time awk '
 BEGIN {
     FS="\t";    # Set field separator as tab
     OFS="\t";   # Set output field separator as tab
@@ -153,11 +153,11 @@ END {
 
 # Append the new header to the RG-replaced SAM file and convert to BAM
 echo "Sorting alignment..."
-{ cat ${RGID}_TEMPHEADER.sam; grep -v '^@' ${RGID}_TEMPRG.sam; } | ${PathSamtools} sort --threads ${threads} -o ${RGID}_TEMP.bam -
+time { cat ${RGID}_TEMPHEADER.sam; grep -v '^@' ${RGID}_TEMPRG.sam; } | ${PathSamtools} sort --threads ${threads} -o ${RGID}_TEMP.bam -
 
 # Mark duplicates
 echo "Marking duplicates..."
-java -jar ${PathPicard} MarkDuplicates I=${RGID}_TEMP.bam O=${PathOutputBam} M=${PathOutputPicardDupStats} REMOVE_DUPLICATES=${RemDups}
+time java -jar ${PathPicard} MarkDuplicates I=${RGID}_TEMP.bam O=${PathOutputBam} M=${PathOutputPicardDupStats} REMOVE_DUPLICATES=${RemDups}
 
 #Remove temp files
 echo "Removing temp files..."
