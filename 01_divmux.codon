@@ -96,8 +96,8 @@ def correct_barcodes_from_fastq(
     # Store all reads of R1 and R2
     sys.stdout.write("Importing R1\n")
     with open(R1, 'r') as R1_fh:
-        R1_lines = R1_fh.readlines()
-        sys.stdout.write(f"R1: {len(R1_lines)//4} reads\n")
+        R_lines = R1_fh.readlines()
+        sys.stdout.write(f"R1: {len(R_lines)//4} reads\n")
     
     sys.stdout.write("I1 Barcode correction...\n")
     # Store number of reads in FASTQ file.
@@ -105,7 +105,7 @@ def correct_barcodes_from_fastq(
     # Store number of reads which have hamming distance of 0, 1, 2 or 3 from barcodes whitelist.
     bc_mismatches_stats = [0, 0, 0, 0]
     # Get total number of reads
-    len_record = len(R1_lines)//4
+    len_record = len(R_lines)//4
     # Get the size of a 1000th of the read number
     prog_100th = len_record//100
     # Initialize Barcode and quality lists
@@ -160,7 +160,7 @@ def correct_barcodes_from_fastq(
     passing_Reads_indices = [x*4 + y for x in passing_BCs_indices for y in range(4)]
     
     sys.stdout.write(f"Keep only barcodes containing {MIN_READS_IN_BC} reads or more...\n")
-    R1_lines = [R1_lines[i] for i in passing_Reads_indices]    
+    R_lines = [R_lines[i] for i in passing_Reads_indices]    
     qual_bcs = [qual_bcs[i] for i in passing_BCs_indices]
     seq_bcs = [seq_bcs[i] for i in passing_BCs_indices]
     corr_bcs = [corr_bcs[i] for i in passing_BCs_indices]
@@ -168,9 +168,9 @@ def correct_barcodes_from_fastq(
     # Modify R1,R2 read names, adds CB tag if BC found at max distance
     sys.stdout.write("Modifying R1 read names...\n")
     reads_in_cells = 0
-    len_record = len(R1_lines)//4
+    len_record = len(R_lines)//4
     
-    for i in range(0, len(R1_lines), 4):
+    for i in range(0, len(R_lines), 4):
         # Tally processed reads
         reads_in_cells += 1
         # Output progress
@@ -181,26 +181,26 @@ def correct_barcodes_from_fastq(
             sys.stdout.write("\r")
             sys.stdout.flush()
 
-        R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
+        R_lines[i] = R_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
 
     # Write new FASTQs for R1
     sys.stdout.write("Writing corrected R1\n\n")
     R1parts = R1.split('.')
     R1_corr = '.'.join(R1parts[:-1]) + '_correct' + '.' + R1parts[-1]
     with open(R1_corr, 'w') as file:
-        file.write(''.join(R1_lines))
+        file.write(''.join(R_lines))
         
 
     sys.stdout.write("Importing R2\n")
     with open(R2, 'r') as R2_fh:
-        R1_lines = R2_fh.readlines()
-        sys.stdout.write(f"R2: {len(R1_lines)//4} reads\n")
-    R1_lines = [R1_lines[i] for i in passing_Reads_indices]
+        R_lines = R2_fh.readlines()
+        sys.stdout.write(f"R2: {len(R_lines)//4} reads\n")
+    R_lines = [R_lines[i] for i in passing_Reads_indices]
     
     sys.stdout.write("Modifying R2 read names...\n")
     reads_in_cells = 0
     
-    for i in range(0, len(R1_lines), 4):
+    for i in range(0, len(R_lines), 4):
         # Tally processed reads
         reads_in_cells += 1
         # Output progress
@@ -211,13 +211,13 @@ def correct_barcodes_from_fastq(
             sys.stdout.write("\r")
             sys.stdout.flush()
 
-        R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
+        R_lines[i] = R_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
     
     # Write new FASTQs for R1    sys.stdout.write("Writing corrected R2\n\n")
     R2parts = R2.split('.')
     R2_corr = '.'.join(R2parts[:-1]) + '_correct' + '.' + R2parts[-1]
     with open(R2_corr, 'w') as file:
-        file.write(''.join(R1_lines))
+        file.write(''.join(R_lines))
         
     # Calculate number of reads with/without a barcode.
     bc_reads = sum(bc_mismatches_stats)
