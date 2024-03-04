@@ -7,14 +7,15 @@
 #   Aligned BAM
 
 # Usage:
-# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathPicard> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats>
+# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathGATK> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats>
 # e.g.:
-# ./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 8 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/picard.jar false /home/ahrmad/micromamba/envs/ali/bin/samtools /home/ahrmad/testing/TEST.bam /home/ahrmad/testing/TEST_DupMetrics.txt
+# ./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 4 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/gatk-4.5.0.0/gatk true /home/ahrmad/micromamba/envs/ali/bin/samtools /home/ahrmad/testing/TEST.bam /home/ahrmad/testing/TEST_DupMetrics.txt
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -
 #   ./bwa-mem2-2.2.1_x64-linux/bwa-mem2 index hg19.fa
 # Install samtools (if not already installed)
+# Install gatk (https://github.com/broadinstitute/gatk/releases/latest)
 set -e
 
 # Variables
@@ -26,7 +27,7 @@ R2="${5}";
 threads="${6}";
 path_bwa="${7}";
 path_bwarefDB="${8}";
-PathPicard="${9}";
+PathGATK="${9}";
 RemDups="${10}";
 PathSamtools="${11}";
 PathOutputBam="${12}";
@@ -43,7 +44,7 @@ if [ ${#@} -lt 13 ] ; then
     printf '        threads \\\n';
     printf '        path_bwa \\\n';
     printf '        path_bwarefDB \\\n';
-    printf '        PathPicard \\\n';
+    printf '        PathGATK \\\n';
     printf '        RemDups \\\n';
     printf '        PathSamtools \\\n';
     printf '        PathOutputBam \\\n';
@@ -57,7 +58,7 @@ if [ ${#@} -lt 13 ] ; then
     printf '  - threads: Number of threads to align with.\n';
     printf '  - path_bwa: Path to BWA binary.\n';
     printf '  - path_bwarefDB: Path to BWA DB w/ extension (ex:hg19.fa).\n';
-    printf '  - PathPicard: Path to picard.jar.\n';
+    printf '  - PathGATK: Path to gatk bin.\n';
     printf '  - RemDups: Remove Duplicates (true) or only mark them (false).\n';
     printf '  - PathSamtools: Path to samtools binary.\n';
     printf '  - PathOutputBam: Path to output BAM file.\n';
@@ -153,12 +154,11 @@ END {
 
 # Append the new header to the RG-replaced SAM file and convert to BAM
 echo "Sorting alignment..."
-{ cat ${RGID}_TEMPHEADER.sam; grep -v '^@' ${RGID}_TEMPRG.sam; } | ${PathSamtools} sort --threads ${threads} -o ${RGID}_TEMP.bam -
+time { cat ${RGID}_TEMPHEADER.sam; grep -v '^@' ${RGID}_TEMPRG.sam; } | ${PathSamtools} sort --threads ${threads} -n -o ${RGID}_TEMP.bam -
 
 # Mark duplicates
 echo "Marking duplicates..."
-java -jar ${PathPicard} MarkDuplicates I=${RGID}_TEMP.bam O=${PathOutputBam} M=${PathOutputPicardDupStats} REMOVE_DUPLICATES=${RemDups}
-/home/ahrmad/gatk-4.5.0.0/gatk MarkDuplicatesSpark -I ScKDMA_S1-modA-nanoCNT_TEMP.bam -O TEST_MULTI.bam -M TEST_MULTI_DupMetrics.txt --remove-all-duplicates false --conf "'spark.executor.cores=${threadsmulti}'"
+${PathGATK} MarkDuplicatesSpark -I ${RGID}_TEMP.bam -O ${PathOutputBam} -M ${PathOutputPicardDupStats} --remove-all-duplicates ${RemDups} --spark-master local[${threads}] 
 
 #Remove temp files
 echo "Removing temp files..."
