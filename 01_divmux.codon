@@ -63,7 +63,6 @@ def correct_barcodes_from_fastq(
     corrected_bc_stats_tsv_filename: str,
     reads_per_barcode_tsv_filename: str,
     max_hamming_dist: int,
-    min_frac_bcs_to_find: float,
     rev_comp: bool
 ) -> float:
     """
@@ -85,8 +84,6 @@ def correct_barcodes_from_fastq(
     max_hamming_dist:
         Maximum hamming distance allowed for the barcode to consider it a match with
         the whitelist. Default: 1.
-    min_frac_bcs_to_find:
-        Required minimum fraction of barcode reads that need to contain a barcode.
     rev_comp:
         Whether to take the Reverse Complement of the BC in I1 before checking the WL.
 
@@ -286,7 +283,6 @@ def main():
         corrected_bc_stats_tsv_filename=corrected_bc_stats_tsv_filename,
         reads_per_barcode_tsv_filename=reads_per_barcode_tsv_filename,
         max_hamming_dist=max_mismatches,
-        min_frac_bcs_to_find=min_frac_bcs_to_find_default,
         rev_comp=rev_comp)
     
     # If we find less than 50% matching bcs then we reperform
@@ -306,7 +302,6 @@ def main():
             corrected_bc_stats_tsv_filename=corrected_bc_stats_tsv_filename,
             reads_per_barcode_tsv_filename=reads_per_barcode_tsv_filename,
             max_hamming_dist=max_mismatches,
-            min_frac_bcs_to_find=min_frac_bcs_to_find_default,
             rev_comp=not rev_comp)
         
         if frac_bcs_found_for < min_frac_bcs_to_find_default:
