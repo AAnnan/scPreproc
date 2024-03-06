@@ -189,7 +189,7 @@ def correct_barcodes_from_fastq(
     R1_corr = '.'.join(R1parts[:-1]) + '_correct' + '.' + R1parts[-1]
     with open(R1_corr, 'w') as file:
         file.write(''.join(R_lines))
-        
+    del R_lines
 
     sys.stdout.write("Importing R2\n")
     with open(R2, 'r') as R2_fh:
