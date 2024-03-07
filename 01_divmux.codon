@@ -10,13 +10,9 @@ from utils import *
 #curl -L https://github.com/exaloop/seq/releases/download/v0.11.3/seq-$(uname -s | awk '{print tolower($0)}')-$(uname -m).tar.gz | tar zxvf - -C .codon/lib/codon/plugins
 
 ## Run script like this:
-# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I1_gzipped_or_not> <Path_R1_unzipped> <Path_R2_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <Hamming_distance_allowed>
+# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I1_gzipped_or_not> <Path_R1_unzipped> <Path_R2_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <sam_header.txt> <Hamming_distance_allowed>
 # e.g.:
-# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=20 01_divmux.codon I1.fq R1.fq R2.fq whitelist.txt demux_stats.tsv reads_per_barcode.tsv 1
-
-# Build exec with: (not very useful as exec still need to be run with codon)
-# codon build -plugin seq -release -exe -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon
-# 01_divmux ScKDMA_S1_R2_001.fastq.gz ScKDMA_S1_R1_001.fastq ScKDMA_S1_R2_001.fastq whitelist_10xATAC_737K-cratac-v1.txt ScKDMA_S1_BC_stats.tsv ScKDMA_S1_reads_per_barcode.tsv 2
+# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=20 01_divmux.codon I1.fq R1.fq R2.fq whitelist.txt demux_stats.tsv reads_per_barcode.tsv sam_header.txt 1
 
 ## Default values
 # BC_LEN and BC_START MIN_READS_IN_BC need to be passed when invoking codon: 
@@ -53,6 +49,7 @@ def read_barcode_whitelist_from_file(
         [bc_whitelist.add(Kmer[bc_length_i](seq(bc_line.strip()))) for bc_line in fh]
     return bc_whitelist
 
+
 def correct_barcodes_from_fastq(
     R1:str,
     I1:str,
@@ -62,6 +59,7 @@ def correct_barcodes_from_fastq(
     nanoCT_singlecell_bc_whitelist: set[Kmer[BC_LEN]],
     corrected_bc_stats_tsv_filename: str,
     reads_per_barcode_tsv_filename: str,
+    SAM_header_filename: str,    
     max_hamming_dist: int,
     rev_comp: bool
 ) -> float:
@@ -92,165 +90,173 @@ def correct_barcodes_from_fastq(
     frac_bcs_found
 
     """
-
-    # Store all reads of R1 and R2
-    sys.stdout.write("Importing R1, R2\n")
-    with open(R1, 'r') as R1_fh, open(R2, 'r') as R2_fh:
-        R1_lines = R1_fh.readlines()
-        sys.stdout.write(f"R1: {len(R1_lines)//4} reads\n")
-        R2_lines = R2_fh.readlines()
-        sys.stdout.write(f"R2: {len(R2_lines)//4} reads\n")
     
-    sys.stdout.write("I1 Barcode correction...\n")
-    # Store number of reads in FASTQ file.
-    total_reads = 0
+    # Initialize barcode FASTQ reader
+    if I1.endswith('.gz'):
+        I1_line = bio.FASTQ(I1, gzip=True, validate=False, copy=True)
+    else:
+        I1_line = bio.FASTQ(I1, gzip=False, validate=False, copy=True)
+    
+    # Initialize barcode and stats lists
+    corr_bcs = List[str](capacity=500000000)
     # Store number of reads which have hamming distance of 0, 1, 2 or 3 from barcodes whitelist.
     bc_mismatches_stats = [0, 0, 0, 0]
-    # Get total number of reads
-    len_record = len(R1_lines)//4
-    # Get the size of a 1000th of the read number
-    prog_100th = len_record//100
-    # Initialize Barcode and quality lists
-    corr_bcs = List[str](capacity=len_record)
-    seq_bcs = List[str](capacity=len_record)
-    qual_bcs = List[str](capacity=len_record)
-
-    for record in bio.FASTQ(I1, gzip=True, validate=False, copy=True):
-        # Tally processed reads
-        total_reads += 1
-
-        # Output progress
-        if total_reads % prog_100th == 0:
-            sys.stdout.write(f"\r{int(100*total_reads/len_record)}%")
-            sys.stdout.flush()
-        if total_reads == len_record:
-            sys.stdout.write("\r")
-            sys.stdout.flush()
-
-        # Get barcode sequence and associated quality from FASTQ record
-        if rev_comp:
-            # reverse complemented
-            bc_seq, bc_qual = ((~(record.seq[start_pos_bc:start_pos_bc+bc_length_i]), record.qual[start_pos_bc:start_pos_bc+bc_length_i][::-1]))
-        else:
-            # Forward
-            bc_seq, bc_qual = (record.seq[start_pos_bc:start_pos_bc+bc_length_i], record.qual[start_pos_bc:start_pos_bc+bc_length_i])
-
-        # Store the original sequence and quality 
-        seq_bcs.append(str(bc_seq))
-        qual_bcs.append(bc_qual)
-
-        # Get the corrected bc (even HD=0)
-        corrected_bc = correct_bc_by_qual_order_with_whitelist_or_correct_bc_with_Ns_with_whitelist(
+    n_bcs = 0
+    
+    sys.stdout.write(f"Correcting barcodes from {I1}\n")
+    try:
+        while True:
+            record = next(I1_line)
+            n_bcs += 1
+            if n_bcs % 10000 == 0:
+                sys.stdout.write(f"\rProcessed {n_bcs} barcodes...")
+                sys.stdout.flush()
+            # Get barcode sequence and associated quality from FASTQ record
+            if rev_comp:
+                # reverse complemented
+                bc_seq, bc_qual = ((~(record.seq[start_pos_bc:start_pos_bc+bc_length_i]), record.qual[start_pos_bc:start_pos_bc+bc_length_i][::-1]))
+            else:
+                # Forward
+                bc_seq, bc_qual = (record.seq[start_pos_bc:start_pos_bc+bc_length_i], record.qual[start_pos_bc:start_pos_bc+bc_length_i])
+                        
+            corrected_bc = correct_bc_by_qual_order_with_whitelist_or_correct_bc_with_Ns_with_whitelist(
             bc_whitelist=nanoCT_singlecell_bc_whitelist,
             bc_length_e=bc_length_i,
             bc_seq=bc_seq,
             bc_qual=bc_qual,
             max_hamming_dist=max_hamming_dist,
-        )
-
-        #If BC found store it, otherwise store NoMatch
-        if corrected_bc:
-            bc_mismatches_stats[corrected_bc.hamming_dist] += 1
-            corr_bcs.append(corrected_bc.corrected_bc)
-        else:
-            corr_bcs.append('NoMatch')
-    
-    #sys.stdout.write("Read Filtering based on matching barcode and min number of reads per barcode...\n")
-    #sys.stdout.write("Calculate reads per barcode...\n")
-    BC_Counter = Counter(corr_bcs)
-    passing_BCs_indices = [index for index, item in enumerate(corr_bcs) if item != 'NoMatch' and BC_Counter[item] >= MIN_READS_IN_BC]
-    passing_Reads_indices = [x*4 + y for x in passing_BCs_indices for y in range(4)]
-    
-    sys.stdout.write(f"Keep only barcodes containing {MIN_READS_IN_BC} reads or more...\n")
-    R1_lines = [R1_lines[i] for i in passing_Reads_indices]
-    R2_lines = [R2_lines[i] for i in passing_Reads_indices]
-    
-    qual_bcs = [qual_bcs[i] for i in passing_BCs_indices]
-    seq_bcs = [seq_bcs[i] for i in passing_BCs_indices]
-    corr_bcs = [corr_bcs[i] for i in passing_BCs_indices]
+            )
+            
+            if corrected_bc:
+                bc_mismatches_stats[corrected_bc.hamming_dist] += 1
+                corr_bcs.append(corrected_bc.corrected_bc)
+            else:
+                corr_bcs.append('NoMatch')
+                
+    except StopIteration:
+        sys.stdout.write("\r")
+        sys.stdout.flush()
+        sys.stdout.write(f"Finished processing {n_bcs} barcodes...\n")
+        BC_Counter = Counter(corr_bcs)
+        n_nomatch = BC_Counter.pop('NoMatch')
+        passing_BCs_indices = set([index for index, item in enumerate(corr_bcs) if BC_Counter[item] >= MIN_READS_IN_BC])
+        passing_BCs = [item for item in BC_Counter if BC_Counter[item] >= MIN_READS_IN_BC]
         
-    # Modify R1,R2 read names, adds CB tag if BC found at max distance
-    sys.stdout.write("Modifying R1, R2 read names...\n")
-    reads_in_cells = 0
-    len_record = len(R1_lines)//4
-    
-    for i in range(0, len(R1_lines), 4):
-        # Tally processed reads
-        reads_in_cells += 1
-        # Output progress
-        if reads_in_cells % prog_100th == 0:
-            sys.stdout.write(f"\r{int(100*reads_in_cells/len_record)}%")
-            sys.stdout.flush()
-        if reads_in_cells == len_record:
+        # Initialize reads FASTQ readers
+        if R1.endswith('.gz'):
+            R1_line = bio.FASTQ(R1, gzip=True, validate=False, copy=True)
+            R1parts = R1.split('.')
+            R1_corr = '.'.join(R1parts[:-2]) + '_correct' + '.' + R1parts[-2]
+        else:
+            R1_line = bio.FASTQ(R1, gzip=False, validate=False, copy=True)
+            R1parts = R1.split('.')
+            R1_corr = '.'.join(R1parts[:-1]) + '_correct' + '.' + R1parts[-1]
+        if R2.endswith('.gz'):
+            R2_line = bio.FASTQ(R2, gzip=True, validate=False, copy=True)
+            R2parts = R2.split('.')
+            R2_corr = '.'.join(R2parts[:-2]) + '_correct' + '.' + R2parts[-2]
+        else:
+            R2_line = bio.FASTQ(R2, gzip=False, validate=False, copy=True)
+            R2parts = R2.split('.')
+            R2_corr = '.'.join(R2parts[:-1]) + '_correct' + '.' + R2parts[-1]
+            
+        # Initialize FASTQ writers and counters
+        R1_corr_fh = open(R1_corr, 'w')
+        R2_corr_fh = open(R2_corr, 'w')
+        n_reads = 0
+        n_passing_reads = 0
+        
+        sys.stdout.write(f"Demultiplexing reads...\n")
+        try:
+            while True:
+                recordR1 = next(R1_line)
+                recordR2 = next(R2_line)
+                
+                if n_reads in passing_BCs_indices:
+                    n_passing_reads += 1
+                    record_name_tagged = recordR1.name + f' RG:Z:{corr_bcs[n_reads]}'
+                    if n_passing_reads == 1:
+                        R1_corr_fh.write(f'@{record_name_tagged}\n{recordR1.read}\n+\n{recordR1.qual}')
+                        R2_corr_fh.write(f'@{record_name_tagged}\n{recordR2.read}\n+\n{recordR2.qual}')
+                    else:
+                        R1_corr_fh.write(f'\n@{record_name_tagged}\n{recordR1.read}\n+\n{recordR1.qual}')
+                        R2_corr_fh.write(f'\n@{record_name_tagged}\n{recordR2.read}\n+\n{recordR2.qual}')
+                
+                n_reads += 1
+                if n_reads % 10000 == 0:
+                    sys.stdout.write(f"\rProcessed {n_reads} reads...") 
+                    sys.stdout.flush()     
+                
+        except StopIteration:
             sys.stdout.write("\r")
             sys.stdout.flush()
+            sys.stdout.write(f"Finished processing {n_reads} reads...\n")
+            # Close the corrected read files
+            R1_corr_fh.close()
+            R2_corr_fh.close()
+            
+            assert n_reads == n_bcs, f"Number of reads in I1 ({n_bcs}) and R1/R2 ({n_reads}) do not match."
 
-        R1_lines[i] = R1_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
-        R2_lines[i] = R2_lines[i].split()[0] + f' CY:Z:{qual_bcs[i//4]}' + f'\tCR:Z:{seq_bcs[i//4]}' + f'\tCB:Z:{corr_bcs[i//4]}' + '\n'
+            sys.stdout.write("Writing stats, log files and SAM header\n\n")
+            # Calculate number of reads with/without a barcode.
+            bc_reads = sum(bc_mismatches_stats) # bcs not found are not there
+            reads_without_bc = n_reads - bc_reads
+            # Calculate fraction of barcodes found in all reads.
+            frac_bcs_found = bc_reads / n_reads
+            # Reads in barcode with less than required amount of reads
+            reads_in_too_small_bc = bc_reads - n_passing_reads
+            
+            # Initialize an empty string variable to store the stats
+            stats_tsv = ""
+            # Append the stats
+            stats_tsv += (
+                f"reads\t{n_reads}\t100.00%\n" +
+                f"bc_reads\t{bc_reads}\t" + f"{(bc_reads / n_reads * 100.0)}%\n" +
+                f"reads_without_bc\t{reads_without_bc}\t" + f"{(reads_without_bc / n_reads * 100.0)}%\n"
+            )
+            for i in range(0, max_hamming_dist + 1):
+                stats_tsv += (
+                    f"bc_reads_with_{i}_mismatches\t{bc_mismatches_stats[i]}\t" +
+                    f"{(bc_mismatches_stats[i] / n_reads * 100.0)}%\n"
+                )
+            stats_tsv += (
+                f"bc_reads\t{bc_reads}\t" + f"{(bc_reads / n_reads * 100.0)}%\n" +
+                f"bc_reads_in_cells\t{n_passing_reads}\t" + f"{(n_passing_reads / bc_reads * 100.0)}%\n" +
+                f"bc_reads_in_too_small_bc\t{reads_in_too_small_bc}\t" + f"{(reads_in_too_small_bc / bc_reads * 100.0)}%\n"
+                f"overall_passing_reads(valid_bc_and_cell)\t{n_passing_reads}\t" + f"{(n_passing_reads / n_reads * 100.0)}%\n"        
+            )
+            # write the stats to corrected_bc_stats_tsv_filename
+            with open(corrected_bc_stats_tsv_filename, 'w') as corrected_bc_stats_tsv_fh:
+                corrected_bc_stats_tsv_fh.write(stats_tsv)
+            
+            # write the reads_per_barcode to reads_per_barcode_tsv_filename
+            with open(reads_per_barcode_tsv_filename, "w") as file:
+                # Write item counts as tab-separated values
+                for bc, read_count in BC_Counter.items():
+                    file.write(f"{read_count}\t{bc}\n")
+                file.write(f"{n_nomatch}\tNoMatch")
 
-    # Write new FASTQs for R1, R2
-    sys.stdout.write("Writing corrected R1, R2 and log files\n\n")
-    R1parts = R1.split('.')
-    R2parts = R2.split('.')
-    R1_corr = '.'.join(R1parts[:-1]) + '_correct' + '.' + R1parts[-1]
-    R2_corr = '.'.join(R2parts[:-1]) + '_correct' + '.' + R2parts[-1]
-    with open(R1_corr, 'w') as file:
-        file.write(''.join(R1_lines))
-    with open(R2_corr, 'w') as file:
-        file.write(''.join(R2_lines))
-    #open(R1_corr, 'w').write(''.join(R1_lines))
-    #open(R2parts, 'w').write(''.join(R2_lines))
+            with open(SAM_header_filename, "w") as file:
+                # Write passing_BC as RG header lines
+                i = 0
+                for passing_BC in passing_BCs:
+                    if i == 0:
+                        file.write(f"@RG\tID:{passing_BC}")
+                    else:
+                        file.write(f"\n@RG\tID:{passing_BC}")
+                    i += 1
+            
+            # print the stats 
+            sys.stdout.write(f'\n{stats_tsv}\n')
 
-    # Calculate number of reads with/without a barcode.
-    bc_reads = sum(bc_mismatches_stats)
-    reads_without_bc = total_reads - bc_reads
-    # Calculate fraction of barcodes found in all reads.
-    frac_bcs_found = bc_reads / total_reads
-    
-    # Reads in barcode with less than required amount of reads
-    reads_in_too_small_bc = bc_reads - reads_in_cells
-    frac_reads_in_too_small_bc = reads_in_cells / bc_reads
-    # Initialize an empty string variable to store the stats
-    stats_tsv = ""
-
-    # Append the stats
-    stats_tsv += (
-        f"reads\t{total_reads}\t100.00%\n" +
-        f"bc_reads\t{bc_reads}\t" + f"{(bc_reads / total_reads * 100.0)}%\n" +
-        f"reads_without_bc\t{reads_without_bc}\t" + f"{(reads_without_bc / total_reads * 100.0)}%\n"
-    )
-    for i in range(0, max_hamming_dist + 1):
-        stats_tsv += (
-            f"bc_reads_with_{i}_mismatches\t{bc_mismatches_stats[i]}\t" +
-            f"{(bc_mismatches_stats[i] / total_reads * 100.0)}%\n"
-        )
-    stats_tsv += (
-        f"bc_reads\t{bc_reads}\t" + f"{(bc_reads / total_reads * 100.0)}%\n" +
-        f"bc_reads_in_cells\t{reads_in_cells}\t" + f"{(reads_in_cells / bc_reads * 100.0)}%\n" +
-        f"bc_reads_in_too_small_bc\t{reads_in_too_small_bc}\t" + f"{(reads_in_too_small_bc / bc_reads * 100.0)}%\n"
-        f"overall_passing_reads(valid_bc_and_cell)\t{reads_in_cells}\t" + f"{(reads_in_cells / total_reads * 100.0)}%\n"        
-    )
-    # write the stats to corrected_bc_stats_tsv_filename
-    with open(corrected_bc_stats_tsv_filename, 'w') as corrected_bc_stats_tsv_fh:
-        corrected_bc_stats_tsv_fh.write(stats_tsv)
-    
-    # write the reads_per_barcode to reads_per_barcode_tsv_filename
-    with open(reads_per_barcode_tsv_filename, "w") as file:
-        # Write item counts as tab-separated values
-        for bc, read_count in BC_Counter.items():
-            file.write(f"{read_count}\t{bc}\n")
-    
-    # print the stats 
-    sys.stdout.write(f'\n{stats_tsv}\n')
-
-    return frac_bcs_found
-
+            return frac_bcs_found
+        
 
 def main():
     # Check that the correct number of arguments are passed
-    if not (isinstance(BC_LEN, int) and isinstance(BC_START, int) and isinstance(MIN_READS_IN_BC, int) and len(sys.argv) == 8):
+    if not (isinstance(BC_LEN, int) and isinstance(BC_START, int) and isinstance(MIN_READS_IN_BC, int) and len(sys.argv) == 9):
         sys.stderr.write(
-            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> -D MIN_READS_IN_BC=<min_reads_in_cells> {sys.argv[0]} I1.fastq.gz R1.fastq R2.fastq whitelist.txt output_stats.tsv output_read_per_barcode.tsv <max_hamming_dist>\n\n")
+            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> -D MIN_READS_IN_BC=<min_reads_in_cells> {sys.argv[0]} I1.fastq.gz R1.fastq R2.fastq whitelist.txt stats.tsv read_per_barcode.tsv sam_header.txt <max_hamming_dist>\n\n")
         sys.exit(1)
     else:
         I1 = sys.argv[1]
@@ -259,7 +265,8 @@ def main():
         nanoCT_singlecell_bc_whitelist_filename = sys.argv[4]
         corrected_bc_stats_tsv_filename = sys.argv[5]
         reads_per_barcode_tsv_filename = sys.argv[6]
-        max_mismatches = int(sys.argv[7])
+        SAM_header_filename = sys.argv[7]
+        max_mismatches = int(sys.argv[8])
     # Check that the max_mismatches is 0, 1, 2 or 3
     if max_mismatches not in [0,1,2,3]:
         sys.stderr.write(f"\nExiting...\n<max_hamming_dist> must be 0, 1, 2 or 3\n")
@@ -282,6 +289,7 @@ def main():
         nanoCT_singlecell_bc_whitelist=nanoCT_singlecell_bc_whitelist,
         corrected_bc_stats_tsv_filename=corrected_bc_stats_tsv_filename,
         reads_per_barcode_tsv_filename=reads_per_barcode_tsv_filename,
+        SAM_header_filename=SAM_header_filename,
         max_hamming_dist=max_mismatches,
         rev_comp=rev_comp)
     
@@ -301,6 +309,7 @@ def main():
             nanoCT_singlecell_bc_whitelist=nanoCT_singlecell_bc_whitelist,
             corrected_bc_stats_tsv_filename=corrected_bc_stats_tsv_filename,
             reads_per_barcode_tsv_filename=reads_per_barcode_tsv_filename,
+            SAM_header_filename=SAM_header_filename,
             max_hamming_dist=max_mismatches,
             rev_comp=not rev_comp)
         
