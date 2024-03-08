@@ -10,9 +10,9 @@ from utils import *
 #curl -L https://github.com/exaloop/seq/releases/download/v0.11.3/seq-$(uname -s | awk '{print tolower($0)}')-$(uname -m).tar.gz | tar zxvf - -C .codon/lib/codon/plugins
 
 ## Run script like this:
-# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I2_gzipped_or_not> <Path_R1_unzipped> <Path_R2_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <sam_header.txt> <Hamming_distance_allowed>
+# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I2_gzipped_or_not> <Path_R1_unzipped> <Path_R2_unzipped> <Path_whitelist_modBC> <Path_whitelist_scBC> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <sam_header.txt> <Hamming_distance_allowed_MOD> <Hamming_distance_allowed_SC>
 # e.g.:
-# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=20 01_divmux.codon I2.fq R1.fq R2.fq whitelist.txt demux_stats.tsv reads_per_barcode.tsv sam_header.txt 1
+# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=20 01_divmux.codon I2.fq R1.fq R2.fq whitelistMod.txt whitelist.txt demux_stats.tsv reads_per_barcode.tsv sam_header.txt 2 1
 
 ## Default values
 # BC_LEN and BC_START MIN_READS_IN_BC need to be passed when invoking codon: 
@@ -256,27 +256,34 @@ def correct_barcodes_from_fastq(
 
 def main():
     # Check that the correct number of arguments are passed
-    if not (isinstance(BC_LEN, int) and isinstance(BC_START, int) and isinstance(MIN_READS_IN_BC, int) and len(sys.argv) == 9):
+    if not (isinstance(BC_LEN, int) and isinstance(BC_START, int) and isinstance(MIN_READS_IN_BC, int) and len(sys.argv) == 11):
         sys.stderr.write(
-            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> -D MIN_READS_IN_BC=<min_reads_in_cells> {sys.argv[0]} I2.fastq.gz R1.fastq R2.fastq whitelist.txt stats.tsv read_per_barcode.tsv sam_header.txt <max_hamming_dist>\n\n")
+            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> -D MIN_READS_IN_BC=<min_reads_in_cells> {sys.argv[0]} I2.fastq.gz R1.fastq R2.fastq whitelist.txt whitelistMod.txt stats.tsv read_per_barcode.tsv sam_header.txt <Hamming_distance_allowed_MOD> <Hamming_distance_allowed_SC>\n\n")
         sys.exit(1)
     else:
         I2 = sys.argv[1]
         R1 = sys.argv[2]
         R2 = sys.argv[3]
-        nanoCT_singlecell_bc_whitelist_filename = sys.argv[4]
-        corrected_bc_stats_tsv_filename = sys.argv[5]
-        reads_per_barcode_tsv_filename = sys.argv[6]
-        SAM_header_filename = sys.argv[7]
-        max_mismatches = int(sys.argv[8])
+        nanoCT_mod_bc_whitelist_filename = sys.argv[4]
+        nanoCT_singlecell_bc_whitelist_filename = sys.argv[5]
+        corrected_bc_stats_tsv_filename = sys.argv[6]
+        reads_per_barcode_tsv_filename = sys.argv[7]
+        SAM_header_filename = sys.argv[8]
+        max_mismatches_mod = int(sys.argv[9])
+        max_mismatches_sc = int(sys.argv[10])
     # Check that the max_mismatches is 0, 1, 2 or 3
-    if max_mismatches not in [0,1,2,3]:
-        sys.stderr.write(f"\nExiting...\n<max_hamming_dist> must be 0, 1, 2 or 3\n")
+    if max_mismatches_mod not in [0,1,2,3] or max_mismatches_sc not in [0,1,2,3]:
+        sys.stderr.write(f"\nExiting...\nHamming Distances must be 0, 1, 2 or 3\n")
         sys.exit(1)
 
     # Read cell barcodes from file and convert to a set of Kmers.
     nanoCT_singlecell_bc_whitelist = read_barcode_whitelist_from_file(
         bc_whitelist_filename=nanoCT_singlecell_bc_whitelist_filename,
+        bc_length_i=BC_LEN)
+    
+    # Read cell barcodes from file and convert to a set of Kmers.
+    nanoCT_mod_bc_whitelist = read_barcode_whitelist_from_file(
+        bc_whitelist_filename=nanoCT_mod_bc_whitelist_filename,
         bc_length_i=BC_LEN)
 
     # Read FASTQ with barcodes and write R1 R2 FASTQs with corrected barcodes in CB comment for barcodes
