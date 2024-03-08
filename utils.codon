@@ -200,7 +200,7 @@ def correct_bc_by_qual_order_with_whitelist_or_correct_bc_with_Ns_with_whitelist
     max_hamming_dist (0, 1, 2 or 3) mismatches (only Ns will be corrected).
 
     """
-    assert len(str(bc_seq)) == bc_length_e
+    assert len(str(bc_seq)) == bc_length_e, "The barcodes are not the expected length..."
     
     if "N" in str(bc_seq):
         corrected_bc = correct_bc_with_Ns_with_whitelist(
