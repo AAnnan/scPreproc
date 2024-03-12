@@ -7,9 +7,9 @@
 #   Aligned BAM
 
 # Usage:
-# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathGATK> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats> <sam_header>
+# ./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathGATK> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats> <sam_header> <min_good_reads_in_cells>
 # e.g.:
-# ./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 4 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/gatk-4.5.0.0/gatk true /home/ahrmad/micromamba/envs/ali/bin/samtools /home/ahrmad/testing/small/xs/TEST.bam /home/ahrmad/testing/small/xs/TEST_DupMetrics.txt /home/ahrmad/testing/small/xs/sam_header.txt
+# ./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 4 /home/ahrmad/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/ahrmad/refBWAmem2/hg19.fa /home/ahrmad/gatk-4.5.0.0/gatk true /home/ahrmad/micromamba/envs/ali/bin/samtools /home/ahrmad/testing/small/xs/TEST.bam /home/ahrmad/testing/small/xs/TEST_DupMetrics.txt /home/ahrmad/testing/small/xs/sam_header.txt 200
 
 # Install bwa-mem2 and index the ref
 #   curl -L https://github.com/bwa-mem2/bwa-mem2/releases/download/v2.2.1/bwa-mem2-2.2.1_x64-linux.tar.bz2 | tar jxf -
@@ -33,6 +33,7 @@ PathSamtools="${11}";
 PathOutputBam="${12}";
 PathOutputPicardDupStats="${13}";
 PathSam_header="${14}";
+min_good_reads_in_cells="${15}";
 
 if [ ${#@} -lt 14 ]; then
     printf '\nUsage:\n';
@@ -51,6 +52,7 @@ if [ ${#@} -lt 14 ]; then
     printf '        PathOutputBam \\\n';
     printf '        PathOutputPicardDupStats\n';
     printf '        PathSam_header\n';
+    printf '        min_good_reads_in_cells\n';
     printf 'Parameters:\n';
     printf '  - exp_type: Experience type (ie. nanoCT).\n';
     printf '  - modality: Modality.\n';
@@ -66,6 +68,7 @@ if [ ${#@} -lt 14 ]; then
     printf '  - PathOutputBam: Path to output BAM file.\n';
     printf '  - PathOutputPicardDupStats: Path to output Picard Duplication Stats file.\n';
     printf '  - PathSam_header: Path to SAM header file as produced by demux.codon.\n';
+    printf '  - min_good_reads_in_cells: Minimum number of Properly paired and mapped reads in cells.\n';
     printf 'Purpose: Align R1 & R2 as built by divmux codon script\n';
     printf '         Output is a bam file with marked/removed duplicates and associated duplication metrics \n\n';
     exit 1
@@ -95,15 +98,27 @@ echo "" > "${RGID}_TEMPHEADER2.sam"
 tail -n +"$((last_sq_line + 1))" "${RGID}_TEMPHEADER.sam" >> "${RGID}_TEMPHEADER2.sam"
 
 # Append the new header to the RG-replaced SAM file and convert to BAM
-{ cat ${RGID}_TEMPHEADER1.sam ${RGID}_RG_HEADER.sam ${RGID}_TEMPHEADER2.sam; ${PathSamtools} view ${RGID}_TEMP.sam; } | ${PathSamtools} sort --threads ${threads} -n -o ${RGID}_TEMP.bam -
+{ cat ${RGID}_TEMPHEADER1.sam ${RGID}_RG_HEADER.sam ${RGID}_TEMPHEADER2.sam; ${PathSamtools} view ${RGID}_TEMP.sam; } | ${PathSamtools} sort --threads ${threads} -m $((4 * threads))G -n --output ${RGID}_TEMP.bam -
 
 # Mark duplicates
 echo "Marking duplicates..."
-${PathGATK} MarkDuplicatesSpark -I ${RGID}_TEMP.bam -O ${PathOutputBam} -M ${PathOutputPicardDupStats} --remove-all-duplicates ${RemDups} --spark-master local[${threads}] 
+${PathGATK} MarkDuplicatesSpark -I ${RGID}_TEMP.bam -O ${RGID}_TEMP_NoDup.bam -M ${PathOutputPicardDupStats} --remove-all-duplicates ${RemDups} --spark-master local[${threads}] 
+
+# Get the number of Properly paired and mapped reads per barcode
+${PathSamtools} view --require-flags 0x2 ${RGID}_TEMP_NoDup.bam | awk '/RG:Z:/{match($0, /RG:Z:[ACGT]+/); cnts[substr($0, RSTART+5, RLENGTH-5)]++} END {for (bc in cnts) print cnts[bc] "\t" bc}' > ${RGID}_ProperPairedMapped_reads_per_barcode.tsv
+# Get the barcodes with more than min_good_reads_in_cells reads
+awk -v threshold="$min_good_reads_in_cells" -F'\t' '$1 >= threshold {print $2}' ${RGID}_ProperPairedMapped_reads_per_barcode > ${RGID}_GoodBarcodes.txt
+# Keep only the Properly paired and mapped reads from the barcodes with less than min_good_reads_in_cells reads
+view_threads=$((threads / 4))
+sort_threads=$((threads - threads / 4))
+sort_memory=$((4 * sort_threads)) 
+${PathSamtools} view --threads ${view_threads} --require-flags 0x2 --read-group-file ${RGID}_GoodBarcodes.txt ${RGID}_TEMP_NoDup.bam | ${PathSamtools} sort -@ ${sort_threads} -m ${sort_memory}G --output ${PathOutputBam} -
+# Index the BAM
+${PathSamtools} index --threads ${threads} --bai --output ${PathOutputBam}.bai ${PathOutputBam}
 
 #Remove temp files
 echo "Removing temp files..."
-rm ${RGID}_TEMP.sam ${RGID}_TEMPHEADER.sam ${RGID}_TEMPHEADER1.sam ${RGID}_TEMPHEADER2.sam ${RGID}_RG_HEADER.sam ${RGID}_TEMP.bam
+rm ${RGID}_TEMP.sam ${RGID}_TEMPHEADER.sam ${RGID}_TEMPHEADER1.sam ${RGID}_TEMPHEADER2.sam ${RGID}_RG_HEADER.sam ${RGID}_TEMP.bam ${RGID}_TEMP_NoDup.bam ${RGID}_GoodBarcodes.txt
 
 # UNUSED CODE
 # Get alignement stats
