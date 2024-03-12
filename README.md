@@ -24,7 +24,7 @@ Values for BC_LEN, BC_START and MIN_READS_IN_BC need to be passed when invoking 
 
 - Run script like this:
 
-`./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathGATK> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats> <sam_header>  <min_good_reads_in_cells>`
+`./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathGATK> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats> <sam_header> <min_good_reads_in_cells>`
 
 e.g.:
 
