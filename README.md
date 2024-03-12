@@ -24,13 +24,16 @@ Values for BC_LEN, BC_START and MIN_READS_IN_BC need to be passed when invoking 
 
 - Run script like this:
 
-`./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathGATK> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats> <sam_header>`
+`./02_divalign.sh <exp_type> <modality> <sample_name> <Path_R1_correct> <Path_R2_correct> <threads> <path_bwa> <path_bwarefDB> <PathGATK> <RemDups> <PathSamtools> <PathOutputBam> <PathOutputPicardDupStats> <sam_header>  <min_good_reads_in_cells>`
 
 e.g.:
 
-`./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 4 /home/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/refBWAmem2/hg19.fa /home/gatk-4.5.0.0/gatk true /home/micromamba/envs/ali/bin/samtools /home/testing/TEST.bam /home/testing/TEST_DupMetrics.txt /home/testing/small/xs/sam_header.txt`
+`./02_divalign.sh nanoCNT modA ScKDMA_S1 R1_correct.fq R2_correct.fq 8 /home/bwa-mem2-2.2.1_x64-linux/bwa-mem2 /home/refBWAmem2/hg19.fa /home/gatk-4.5.0.0/gatk true /home/micromamba/envs/ali/bin/samtools /home/testing/TEST.bam /home/testing/TEST_DupMetrics.txt /home/testing/sam_header.txt 200`
 
-- Output (in script dir):
-`<sample_name>-<modality>-<exp_type>_MarkedDup.bam`
-`<sample_name>-<modality>-<exp_type>_DupMetrics.txt`
+- Output:
+`<PathOutputBam>`
+`<PathOutputBam>.bai`
+`<PathOutputPicardDupStats>`
+In script directory:
+`<sample_name>-<modality>-<exp_type>_ProperPairedMapped_reads_per_barcode.tsv`
 
