@@ -13,6 +13,7 @@ from utils import *
 # codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I2_gzipped_or_not> <Path_R1_unzipped> <Path_R2_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <sam_header.txt> <Hamming_distance_allowed>
 # e.g.:
 # codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=20 01_divmux.codon I2.fq R1.fq R2.fq whitelist.txt demux_stats.tsv reads_per_barcode.tsv sam_header.txt 1
+# START position values are 0-based!
 
 ## Default values
 # BC_LEN and BC_START MIN_READS_IN_BC need to be passed when invoking codon: 
@@ -24,7 +25,7 @@ min_frac_bcs_to_find_default = 0.5
 # By default we reverse-complement the BC read (I2)
 # If we find less than 50% matching bcs then we reperform
 # the correction with rev_comp set to False
-rev_comp = True
+rev_comp = False
 
 ## Functions
 def read_barcode_whitelist_from_file(
@@ -109,7 +110,7 @@ def correct_barcodes_from_fastq(
             record = next(I2_line)
             n_bcs += 1
             if n_bcs % 10000 == 0:
-                sys.stdout.write(f"\rProcessed {n_bcs} barcodes...")
+                sys.stdout.write(f"\r{n_bcs} barcodes corrected...")
                 sys.stdout.flush()
             # Get barcode sequence and associated quality from FASTQ record
             if rev_comp:
@@ -136,7 +137,7 @@ def correct_barcodes_from_fastq(
     except StopIteration:
         sys.stdout.write("\r")
         sys.stdout.flush()
-        sys.stdout.write(f"Finished processing {n_bcs} barcodes...\n")
+        sys.stdout.write(f"Finished. Corrected {n_bcs} barcodes...\n")
         
         BC_Counter = Counter(corr_bcs)
         n_nomatch = BC_Counter.pop('NoMatch')
@@ -203,6 +204,7 @@ def correct_barcodes_from_fastq(
             # Calculate number of reads with/without a barcode.
             bc_reads = sum(bc_mismatches_stats) # bcs not found are not there
             reads_without_bc = n_reads - bc_reads
+            n_passing_reads = n_passing_reads - reads_without_bc
             # Calculate fraction of barcodes found in all reads.
             frac_bcs_found = bc_reads / n_reads
             # Reads in barcode with less than required amount of reads
@@ -223,7 +225,7 @@ def correct_barcodes_from_fastq(
                 )
             stats_tsv += (
                 f"bc_reads\t{bc_reads}\t" + f"{(bc_reads / n_reads * 100.0)}%\n" +
-                f"bc_reads_in_cells\t{n_passing_reads}\t" + f"{(n_passing_reads / bc_reads * 100.0)}%\n" +
+                f"bc_reads_in_large_enough_bc\t{n_passing_reads}\t" + f"{(n_passing_reads / bc_reads * 100.0)}%\n" +
                 f"bc_reads_in_too_small_bc\t{reads_in_too_small_bc}\t" + f"{(reads_in_too_small_bc / bc_reads * 100.0)}%\n"
                 f"overall_passing_reads(valid_bc_and_cell)\t{n_passing_reads}\t" + f"{(n_passing_reads / n_reads * 100.0)}%\n"        
             )
@@ -282,7 +284,7 @@ def main():
     # Read FASTQ with barcodes and write R1 R2 FASTQs with corrected barcodes in CB comment for barcodes
     # that match the whitelist closely enough, else only write the original barcodes in CR.
     # Output the fraction of reads that have a barcode
-    frac_bcs_found_rev = correct_barcodes_from_fastq(
+    frac_bcs_found = correct_barcodes_from_fastq(
         R1 = R1,
         I2 = I2,
         R2 = R2,
@@ -296,13 +298,20 @@ def main():
         rev_comp=rev_comp)
     
     # If we find less than 50% matching bcs then we reperform
-    # the correction with rev_comp set to False
+    # the correction with rev_comp inversed (if True then False and vice-versa)
     # and check again if we find more than 50% matching bcs
     # If not we exit with an error
-    if frac_bcs_found_rev < min_frac_bcs_to_find_default:
-        sys.stdout.write(f"Warning: Only {frac_bcs_found_rev * 100.00}% of the reads have a valid barcode.\n \
-    Barcode correction will be reperformed with I2 as Forward instead of Reverse.\n")
-        frac_bcs_found_for = correct_barcodes_from_fastq(
+    if rev_comp:
+        present_state = 'Reverse'
+        next_state = 'Forward'
+    else:
+        present_state = 'Forward'
+        next_state = 'Reverse'
+    
+    if frac_bcs_found < min_frac_bcs_to_find_default:
+        sys.stdout.write(f"Warning: Only {frac_bcs_found * 100.00}% of the reads have a valid barcode.\n \
+    Barcode correction will be reperformed with I2 as {next_state} instead of {present_state}.\n")
+        frac_bcs_found_rev_comp = correct_barcodes_from_fastq(
             R1 = R1,
             I2 = I2,
             R2 = R2,
@@ -315,15 +324,15 @@ def main():
             max_hamming_dist=max_mismatches,
             rev_comp=not rev_comp)
         
-        if frac_bcs_found_for < min_frac_bcs_to_find_default:
-            sys.stderr.write(f"Warning: Only {frac_bcs_found_for * 100.00}% of the reads have a valid barcode (Forward mode).\n \
-                                        Only {frac_bcs_found_rev * 100.00}% of the reads have a valid barcode (Reverse mode).\n \
-                Check if you provided the correct barcode whitelist file.\n")
+        if frac_bcs_found_rev_comp < min_frac_bcs_to_find_default:
+            sys.stderr.write(f"Warning: Only {frac_bcs_found_rev_comp * 100.00}% of the reads have a valid barcode ({present_state} mode).\n \
+                                        Only {frac_bcs_found * 100.00}% of the reads have a valid barcode ({next_state} mode).\n \
+                Check if you provided the correct barcode whitelist and position.\n")
             sys.exit(1)
         else:
-            sys.stdout.write(f"{frac_bcs_found_for * 100.00}% of the reads (Forward mode) had a valid barcode.\n")
+            sys.stdout.write(f"{frac_bcs_found_rev_comp * 100.00}% of the reads ({next_state} mode) had a valid barcode.\n")
     else:
-        sys.stdout.write(f"{frac_bcs_found_rev * 100.00}% of the reads (Reverse mode) had a valid barcode.\n")
+        sys.stdout.write(f"{frac_bcs_found * 100.00}% of the reads ({present_state} mode) had a valid barcode.\n")
 
 if __name__ == "__main__":
     main()
