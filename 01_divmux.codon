@@ -20,7 +20,7 @@ from utils import *
 # "codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 divmux.codon ..."
 
 # Minimum percentage of barcodes that should be found before returning with an error.
-min_frac_bcs_to_find_default = 0.5
+min_frac_bcs_to_find_default = 0.4
 
 # By default we reverse-complement the BC read (I2)
 # If we find less than 50% matching bcs then we reperform
@@ -57,10 +57,10 @@ def correct_barcodes_from_fastq(
     R2:str,
     start_pos_bc: Static[int],
     bc_length_i: Static[int],
-    nanoCT_singlecell_bc_whitelist: set[Kmer[BC_LEN]],
+    bc_whitelist: set[Kmer[BC_LEN]],
     corrected_bc_stats_tsv_filename: str,
     reads_per_barcode_tsv_filename: str,
-    SAM_header_filename: str,    
+    SAM_RGheader_filename: str,    
     max_hamming_dist: int,
     rev_comp: bool
 ) -> float:
@@ -70,7 +70,7 @@ def correct_barcodes_from_fastq(
 
     Parameters
     ----------
-    nanoCT_singlecell_bc_whitelist:
+    bc_whitelist:
         File with 16bp cell barcode whitelist
     R1 & R2:
         Input FASTQ files with normal reads
@@ -121,7 +121,7 @@ def correct_barcodes_from_fastq(
                 bc_seq, bc_qual = (record.seq[start_pos_bc:start_pos_bc+bc_length_i], record.qual[start_pos_bc:start_pos_bc+bc_length_i])
                         
             corrected_bc = correct_bc_by_qual_order_with_whitelist_or_correct_bc_with_Ns_with_whitelist(
-            bc_whitelist=nanoCT_singlecell_bc_whitelist,
+            bc_whitelist=bc_whitelist,
             bc_length_e=bc_length_i,
             bc_seq=bc_seq,
             bc_qual=bc_qual,
@@ -176,7 +176,7 @@ def correct_barcodes_from_fastq(
                 
                 if n_reads in passing_BCs_indices:
                     n_passing_reads += 1
-                    record_name_tagged = recordR1.name + f' RG:Z:{corr_bcs[n_reads]}'
+                    record_name_tagged = recordR1.name + f' RG:Z:{corr_bcs[n_reads]}' + f' CB:Z:{corr_bcs[n_reads]}'
                     if n_passing_reads == 1:
                         R1_corr_fh.write(f'@{record_name_tagged}\n{recordR1.read}\n+\n{recordR1.qual}')
                         R2_corr_fh.write(f'@{record_name_tagged}\n{recordR2.read}\n+\n{recordR2.qual}')
@@ -241,7 +241,7 @@ def correct_barcodes_from_fastq(
                     file.write(f"{read_count}\t{bc}\n")
                 file.write(f"{n_nomatch}\tNoMatch")
             # Write passing_BC as RG header lines
-            with open(SAM_header_filename, "w") as file:
+            with open(SAM_RGheader_filename, "w") as file:
                 i = 0
                 for passing_BC in passing_BCs:
                     if i == 0:
@@ -266,10 +266,10 @@ def main():
         I2 = sys.argv[1]
         R1 = sys.argv[2]
         R2 = sys.argv[3]
-        nanoCT_singlecell_bc_whitelist_filename = sys.argv[4]
+        bc_whitelist_filename = sys.argv[4]
         corrected_bc_stats_tsv_filename = sys.argv[5]
         reads_per_barcode_tsv_filename = sys.argv[6]
-        SAM_header_filename = sys.argv[7]
+        SAM_RGheader_filename = sys.argv[7]
         max_mismatches = int(sys.argv[8])
     # Check that the max_mismatches is 0, 1, 2 or 3
     if max_mismatches not in [0,1,2,3]:
@@ -277,8 +277,8 @@ def main():
         sys.exit(1)
 
     # Read cell barcodes from file and convert to a set of Kmers.
-    nanoCT_singlecell_bc_whitelist = read_barcode_whitelist_from_file(
-        bc_whitelist_filename=nanoCT_singlecell_bc_whitelist_filename,
+    bc_whitelist = read_barcode_whitelist_from_file(
+        bc_whitelist_filename=bc_whitelist_filename,
         bc_length_i=BC_LEN)
 
     # Read FASTQ with barcodes and write R1 R2 FASTQs with corrected barcodes in CB comment for barcodes
@@ -290,10 +290,10 @@ def main():
         R2 = R2,
         start_pos_bc=BC_START,
         bc_length_i=BC_LEN,
-        nanoCT_singlecell_bc_whitelist=nanoCT_singlecell_bc_whitelist,
+        bc_whitelist=bc_whitelist,
         corrected_bc_stats_tsv_filename=corrected_bc_stats_tsv_filename,
         reads_per_barcode_tsv_filename=reads_per_barcode_tsv_filename,
-        SAM_header_filename=SAM_header_filename,
+        SAM_RGheader_filename=SAM_RGheader_filename,
         max_hamming_dist=max_mismatches,
         rev_comp=rev_comp)
     
@@ -317,22 +317,22 @@ def main():
             R2 = R2,
             start_pos_bc=BC_START,
             bc_length_i=BC_LEN,
-            nanoCT_singlecell_bc_whitelist=nanoCT_singlecell_bc_whitelist,
+            bc_whitelist=bc_whitelist,
             corrected_bc_stats_tsv_filename=corrected_bc_stats_tsv_filename,
             reads_per_barcode_tsv_filename=reads_per_barcode_tsv_filename,
-            SAM_header_filename=SAM_header_filename,
+            SAM_RGheader_filename=SAM_RGheader_filename,
             max_hamming_dist=max_mismatches,
             rev_comp=not rev_comp)
         
         if frac_bcs_found_rev_comp < min_frac_bcs_to_find_default:
-            sys.stderr.write(f"Warning: Only {frac_bcs_found_rev_comp * 100.00}% of the reads have a valid barcode ({present_state} mode).\n \
-                                        Only {frac_bcs_found * 100.00}% of the reads have a valid barcode ({next_state} mode).\n \
-                Check if you provided the correct barcode whitelist and position.\n")
+            sys.stderr.write(f"Warning: Only {frac_bcs_found_rev_comp * 100.00}% of the reads have a valid {present_state} barcode.\n \
+                                        Only {frac_bcs_found * 100.00}% of the reads have a valid {next_state} barcode.\n \
+                Make sure you provided correct barcode infromation (whitelist file, position, length).\n")
             sys.exit(1)
         else:
-            sys.stdout.write(f"{frac_bcs_found_rev_comp * 100.00}% of the reads ({next_state} mode) had a valid barcode.\n")
+            sys.stdout.write(f"{frac_bcs_found_rev_comp * 100.00}% of the reads had a valid {next_state} barcode.\n")
     else:
-        sys.stdout.write(f"{frac_bcs_found * 100.00}% of the reads ({present_state} mode) had a valid barcode.\n")
+        sys.stdout.write(f"{frac_bcs_found * 100.00}% of the reads had a valid {present_state}  barcode.\n")
 
 if __name__ == "__main__":
     main()
