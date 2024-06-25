@@ -2,6 +2,7 @@ import sys
 import bio # codon (seq) library
 from collections import Counter
 from utils import *
+import re
 
 ## Install
 #CODON
@@ -10,7 +11,7 @@ from utils import *
 #curl -L https://github.com/exaloop/seq/releases/download/v0.11.3/seq-$(uname -s | awk '{print tolower($0)}')-$(uname -m).tar.gz | tar zxvf - -C .codon/lib/codon/plugins
 
 ## Run script like this:
-# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I2_gzipped_or_not> <Path_R1_unzipped> <Path_R2_unzipped> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <sam_header.txt> <Hamming_distance_allowed>
+# codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=200 01_divmux.codon <Path_I2_gzipped_or_not> <Path_R1_gzipped_or_not> <Path_R2_gzipped_or_not> <Path_whitelist> <Path_output_stats.tsv> <Path_reads_per_barcode_stats.tsv> <sam_header.txt> <Hamming_distance_allowed>
 # e.g.:
 # codon run -plugin seq -release -D BC_LEN=16 -D BC_START=29 -D MIN_READS_IN_BC=20 01_divmux.codon I2.fq R1.fq R2.fq whitelist.txt demux_stats.tsv reads_per_barcode.tsv sam_header.txt 1
 # START position values are 0-based!
@@ -26,6 +27,11 @@ min_frac_bcs_to_find_default = 0.4
 # If we find less than 50% matching bcs then we reperform
 # the correction with rev_comp set to False
 rev_comp = False
+
+# By default we demultiplex virgin fastqs
+# if the fastq has been tagged before, 
+# it will be detected by correct_barcodes_from_fastq
+existing_sam_tag = False
 
 ## Functions
 def read_barcode_whitelist_from_file(
@@ -51,6 +57,24 @@ def read_barcode_whitelist_from_file(
     return bc_whitelist
 
 
+def comment_starts_like_SAMtag(s: str) -> bool:
+    """
+    Check if a fastq starts with a specific pattern.
+
+    The pattern is defined like a SAM tag:
+    - The first character is a letter (A-Z or a-z).
+    - The second character is either a letter (A-Z or a-z) or a digit (0-9).
+    - The third character is a colon (:).
+
+    Parameters:
+    s (str): The input string to be checked.
+
+    Returns:
+    bool: True if the string starts with the specified pattern, False otherwise.
+    """
+    SAM_TAG_pattern = r'^[A-Za-z][A-Za-z0-9]:'
+    return bool(re.match(SAM_TAG_pattern, s))
+
 def correct_barcodes_from_fastq(
     R1:str,
     I2:str,
@@ -71,18 +95,18 @@ def correct_barcodes_from_fastq(
     Parameters
     ----------
     bc_whitelist:
-        File with 16bp cell barcode whitelist
+        File with barcode whitelist, newline separated
     R1 & R2:
         Input FASTQ(.GZ) files with normal reads
     I2:
         Input FASTQ(.GZ) file with raw barcode reads, made from:
           - 16bp cell barcode 29-45
-          (- 8bp modality barcode 0-8)
+          - 8bp modality barcode 0-8
     corrected_bc_stats_tsv_filename:
         File with barcode correction statistics.
     max_hamming_dist:
         Maximum hamming distance allowed for the barcode to consider it a match with
-        the whitelist. Default: 1.
+        the whitelist.
     rev_comp:
         Whether to take the Reverse Complement of the BC in I2 before checking the WL.
 
@@ -91,6 +115,7 @@ def correct_barcodes_from_fastq(
     frac_bcs_found
 
     """
+    global existing_sam_tag
     
     # Initialize barcode FASTQ reader
     if I2.endswith('.gz'):
@@ -107,7 +132,7 @@ def correct_barcodes_from_fastq(
     sys.stdout.write(f"Correcting barcodes from {I2}\n")
     for record in I2_gen:
         n_bcs += 1
-        if n_bcs % 10000 == 0:
+        if n_bcs % 20000 == 0:
             sys.stdout.write(f"\r{n_bcs} barcodes corrected...")
             sys.stdout.flush()
         # Get barcode sequence and associated quality from FASTQ record
@@ -167,9 +192,18 @@ def correct_barcodes_from_fastq(
     
     sys.stdout.write(f"Demultiplexing reads...\n")
     for recordR1,recordR2 in zip(R1_gen, R2_gen):
+        #assert recordR1.name == recordR2.name, f"R1 ({R1}) & R2 ({R2}) read names don't match."
         if n_reads in passing_BCs_indices:
             n_passing_reads += 1
-            record_name_tagged = recordR1.name + f' RG:Z:{corr_bcs[n_reads]}' + f' CB:Z:{corr_bcs[n_reads]}'
+            
+            if n_passing_reads == 1:
+                existing_sam_tag = comment_starts_like_SAMtag(recordR1.comment)
+            
+            if existing_sam_tag:
+                record_name_tagged = recordR1.name + f' {recordR1.comment}' + f' RG:Z:{corr_bcs[n_reads]}' + f' CB:Z:{corr_bcs[n_reads]}'
+            else:
+                record_name_tagged = recordR1.name + f' RG:Z:{corr_bcs[n_reads]}' + f' CB:Z:{corr_bcs[n_reads]}'
+
             if n_passing_reads == 1:
                 R1_corr_fh.write(f'@{record_name_tagged}\n{recordR1.read}\n+\n{recordR1.qual}')
                 R2_corr_fh.write(f'@{record_name_tagged}\n{recordR2.read}\n+\n{recordR2.qual}')
@@ -178,7 +212,7 @@ def correct_barcodes_from_fastq(
                 R2_corr_fh.write(f'\n@{record_name_tagged}\n{recordR2.read}\n+\n{recordR2.qual}')
         
         n_reads += 1
-        if n_reads % 10000 == 0:
+        if n_reads % 20000 == 0:
             sys.stdout.write(f"\rProcessed {n_reads} reads...") 
             sys.stdout.flush()     
 
@@ -234,13 +268,11 @@ def correct_barcodes_from_fastq(
         file.write(f"{n_nomatch}\tNoMatch")
     # Write passing_BC as RG header lines
     with open(SAM_RGheader_filename, "w") as file:
-        i = 0
-        for passing_BC in passing_BCs:
+        for i,passing_BC in enumerate(passing_BCs):
             if i == 0:
                 file.write(f"@RG\tID:{passing_BC}")
             else:
                 file.write(f"\n@RG\tID:{passing_BC}")
-            i += 1
     
     # print the stats to the console
     sys.stdout.write(f'\n{stats_tsv}\n')
@@ -252,7 +284,7 @@ def main():
     # Check that the correct number of arguments are passed
     if not (isinstance(BC_LEN, int) and isinstance(BC_START, int) and isinstance(MIN_READS_IN_BC, int) and len(sys.argv) == 9):
         sys.stderr.write(
-            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> -D MIN_READS_IN_BC=<min_reads_in_cells> {sys.argv[0]} I2.fastq.gz R1.fastq R2.fastq whitelist.txt stats.tsv read_per_barcode.tsv sam_header.txt <max_hamming_dist>\n\n")
+            f"Wrong call, exiting...\nUsage: codon run -plugin seq -release -D BC_LEN=<bc_length> -D BC_START=<start_pos_bc> -D MIN_READS_IN_BC=<min_reads_in_cells> {sys.argv[0]} I2.fastq.gz R1.fastq R2.fastq.gz whitelist.txt stats.tsv read_per_barcode.tsv sam_header.txt <max_hamming_dist>\n\n")
         sys.exit(1)
     else:
         I2 = sys.argv[1]
@@ -324,7 +356,7 @@ def main():
         else:
             sys.stdout.write(f"{frac_bcs_found_rev_comp * 100.00}% of the reads had a valid {next_state} barcode.\n")
     else:
-        sys.stdout.write(f"{frac_bcs_found * 100.00}% of the reads had a valid {present_state}  barcode.\n")
+        sys.stdout.write(f"{frac_bcs_found * 100.00}% of the reads had a valid {present_state} barcode.\n")
 
 if __name__ == "__main__":
     main()
