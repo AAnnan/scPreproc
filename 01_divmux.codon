@@ -349,8 +349,8 @@ def main():
             rev_comp=not rev_comp)
         
         if frac_bcs_found_rev_comp < min_frac_bcs_to_find_default:
-            sys.stderr.write(f"Warning: Only {frac_bcs_found_rev_comp * 100.00}% of the reads have a valid {present_state} barcode.\n \
-                                        Only {frac_bcs_found * 100.00}% of the reads have a valid {next_state} barcode.\n \
+            sys.stderr.write(f"Warning: Only {frac_bcs_found * 100.00}% of the reads have a valid {present_state} barcode.\n \
+                                        Only {frac_bcs_found_rev_comp * 100.00}% of the reads have a valid {next_state} barcode.\n \
                 Make sure you provided correct barcode infromation (whitelist file, position, length).\n")
             sys.exit(1)
         else:
