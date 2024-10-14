@@ -107,7 +107,7 @@ tail -n +"$((last_sq_line + 1))" "${RGID}_TEMPHEADER.sam" >> "${RGID}_TEMPHEADER
 
 # Mark duplicates
 echo "Marking duplicates..."
-${PathGATK} MarkDuplicatesSpark -I ${RGID}_TEMP.bam -O ${RGID}_TEMP_NoDup.bam -M ${PathOutputPicardDupStats} --remove-all-duplicates ${RemDups} --spark-master local[${threads}] 
+${PathGATK} MarkDuplicates -I ${RGID}_TEMP.bam -O ${RGID}_TEMP_NoDup.bam -M ${PathOutputPicardDupStats} --REMOVE_DUPLICATES ${RemDups} --BARCODE_TAG CB --CREATE_INDEX true --MAX_RECORDS_IN_RAM 10000000
 
 echo "Get numbers of properly paired and mapped reads per barcode..."
 # Get the number of Properly paired and mapped reads per barcode
